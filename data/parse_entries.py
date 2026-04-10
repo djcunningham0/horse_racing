@@ -1,0 +1,201 @@
+"""Parse Equibase PPS (Past Performance Statement) ZIP/XML files."""
+
+import xml.etree.ElementTree as ET
+import zipfile
+from pathlib import Path
+
+from data.schema import make_race_id, parse_odds, safe_float, safe_int, xml_text
+
+
+def _parse_date(date_str: str | None) -> str | None:
+    """Normalize Equibase date format '2023-04-29+00:00' → '2023-04-29'."""
+    if not date_str:
+        return None
+    return date_str.split("+")[0].split("T")[0]
+
+
+def _parse_past_performance(
+    pp: ET.Element, race_id: str, horse_name: str, registration_number: str, pp_index: int
+) -> dict:
+    """Extract fields from a PastPerformance element."""
+    start = pp.find("Start")
+
+    row = {
+        "race_id": race_id,
+        "horse_name": horse_name,
+        "registration_number": registration_number,
+        "pp_index": pp_index,
+        "pp_race_date": _parse_date(xml_text(pp, "RaceDate")),
+        "pp_track": xml_text(pp, "Track/TrackID"),
+        "pp_race_number": safe_int(xml_text(pp, "RaceNumber")),
+        "pp_race_type": xml_text(pp, "RaceType/RaceType"),
+        "pp_distance_id": safe_int(xml_text(pp, "Distance/DistanceId")),
+        "pp_surface": xml_text(pp, "Course/CourseType/Value"),
+        "pp_track_condition": xml_text(pp, "TrackCondition/Value"),
+        "pp_num_starters": safe_int(xml_text(pp, "NumberOfStarters")),
+        "pp_purse": safe_float(xml_text(pp, "PurseUSA")),
+    }
+
+    if start is not None:
+        row["pp_post_position"] = safe_int(xml_text(start, "PostPosition"))
+        row["pp_official_finish"] = safe_int(xml_text(start, "OfficialFinish"))
+        row["pp_speed_figure"] = safe_int(xml_text(start, "SpeedFigure"))
+        row["pp_odds"] = parse_odds(xml_text(start, "Odds"))
+        row["pp_weight_carried"] = safe_int(xml_text(start, "WeightCarried"))
+        row["pp_class_rating"] = safe_int(xml_text(start, "ClassRating"))
+        row["pp_jockey_last_name"] = xml_text(start, "Jockey/LastName")
+        row["pp_trainer_last_name"] = xml_text(start, "Trainer/LastName")
+        row["pp_long_comment"] = xml_text(start, "LongComment")
+        row["pp_short_comment"] = xml_text(start, "ShortComment")
+        row["pp_pace_figure_1"] = safe_int(xml_text(start, "PaceFigure1"))
+        row["pp_pace_figure_2"] = safe_int(xml_text(start, "PaceFigure2"))
+        row["pp_pace_figure_3"] = safe_int(xml_text(start, "PaceFigure3"))
+    else:
+        for key in [
+            "pp_post_position", "pp_official_finish", "pp_speed_figure", "pp_odds",
+            "pp_weight_carried", "pp_class_rating", "pp_jockey_last_name",
+            "pp_trainer_last_name", "pp_long_comment", "pp_short_comment",
+            "pp_pace_figure_1", "pp_pace_figure_2", "pp_pace_figure_3",
+        ]:
+            row[key] = None
+
+    return row
+
+
+def _parse_workout(
+    wo: ET.Element, race_id: str, horse_name: str, registration_number: str
+) -> dict:
+    """Extract fields from a Workout element."""
+    return {
+        "race_id": race_id,
+        "horse_name": horse_name,
+        "registration_number": registration_number,
+        "workout_date": _parse_date(xml_text(wo, "Date")),
+        "workout_track": xml_text(wo, "Track/TrackID"),
+        "workout_distance": xml_text(wo, "Distance/PublishedValue"),
+        "workout_time": xml_text(wo, "Timing"),
+        "workout_type": xml_text(wo, "TypeOfWorkout/Value"),
+        "workout_course": xml_text(wo, "CourseType/CourseType"),
+        "workout_track_condition": xml_text(wo, "TrackCondition/Value"),
+        "workout_ranking": xml_text(wo, "Ranking"),
+        "workout_num_in_group": xml_text(wo, "NumberInRankingGroup"),
+        "workout_comment": xml_text(wo, "Comment"),
+    }
+
+
+def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
+    """Parse a PPS ZIP file into (entries, past_performances, workouts).
+
+    Each ZIP contains a single XML file with an EntryRaceCard for one
+    track on one date.
+    """
+    with zipfile.ZipFile(zip_path) as zf:
+        xml_name = zf.namelist()[0]
+        with zf.open(xml_name) as f:
+            tree = ET.parse(f)
+
+    root = tree.getroot()
+
+    race_date = _parse_date(xml_text(root, "RaceDate"))
+    track = xml_text(root, "Track/TrackID")
+
+    entries = []
+    past_performances = []
+    workouts = []
+
+    for race_el in root.findall("Race"):
+        race_number = safe_int(xml_text(race_el, "RaceNumber"))
+        if race_number is None:
+            continue
+
+        race_id = make_race_id(race_date or "", track or "", race_number)
+
+        race_fields = {
+            "race_id": race_id,
+            "race_date": race_date,
+            "track": track,
+            "race_number": race_number,
+            "breed": xml_text(race_el, "BreedType/Value"),
+            "race_type": xml_text(race_el, "RaceType/RaceType"),
+            "race_type_desc": xml_text(race_el, "RaceType/Description"),
+            "surface": xml_text(race_el, "Course/CourseType/Value"),
+            "distance_id": safe_int(xml_text(race_el, "Distance/DistanceId")),
+            "distance_published": xml_text(race_el, "Distance/PublishedValue"),
+            "purse": safe_float(xml_text(race_el, "PurseUSA")),
+            "grade": xml_text(race_el, "Grade"),
+            "num_runners": safe_int(xml_text(race_el, "NumberOfRunners")),
+            "condition_text": xml_text(race_el, "ConditionText"),
+            "max_claim_price": safe_float(xml_text(race_el, "MaximumClaimPrice")),
+            "age_restriction": xml_text(race_el, "AgeRestriction/Value"),
+            "sex_restriction": xml_text(race_el, "SexRestriction/Value"),
+        }
+
+        for starter in race_el.findall("Starters"):
+            horse_el = starter.find("Horse")
+            if horse_el is None:
+                continue
+
+            horse_name = xml_text(horse_el, "HorseName")
+            registration_number = xml_text(horse_el, "RegistrationNumber")
+
+            entry = {**race_fields}
+            entry["horse_name"] = horse_name
+            entry["registration_number"] = registration_number
+            entry["year_of_birth"] = safe_int(xml_text(horse_el, "YearOfBirth"))
+            entry["sex"] = xml_text(horse_el, "Sex/Value")
+            entry["post_position"] = safe_int(xml_text(starter, "PostPosition"))
+            entry["program_number"] = xml_text(starter, "ProgramNumber")
+
+            odds_raw = xml_text(starter, "Odds")
+            entry["morning_line_odds"] = odds_raw
+            entry["morning_line_decimal"] = parse_odds(odds_raw)
+
+            entry["weight_carried"] = safe_int(xml_text(starter, "WeightCarried"))
+
+            jockey_el = starter.find("Jockey")
+            if jockey_el is not None:
+                entry["jockey_first_name"] = xml_text(jockey_el, "FirstName")
+                entry["jockey_last_name"] = xml_text(jockey_el, "LastName")
+            else:
+                entry["jockey_first_name"] = None
+                entry["jockey_last_name"] = None
+
+            trainer_el = starter.find("Trainer")
+            if trainer_el is not None:
+                entry["trainer_first_name"] = xml_text(trainer_el, "FirstName")
+                entry["trainer_last_name"] = xml_text(trainer_el, "LastName")
+            else:
+                entry["trainer_first_name"] = None
+                entry["trainer_last_name"] = None
+
+            entry["equipment"] = xml_text(starter, "Equipment/Value")
+            entry["medication"] = xml_text(starter, "Medication/Value")
+            entry["apprentice_weight_allowance"] = safe_int(
+                xml_text(starter, "ApprenticeWeightAllowance")
+            )
+            entry["class_rating"] = safe_int(xml_text(starter, "TodaysHorseClassRating"))
+
+            entries.append(entry)
+
+            # Past performances — sorted by date descending, indexed 1=most recent
+            pps = starter.findall("PastPerformance")
+            pp_dates = []
+            for pp in pps:
+                pp_date = _parse_date(xml_text(pp, "RaceDate"))
+                pp_dates.append((pp_date or "", pp))
+            pp_dates.sort(key=lambda x: x[0], reverse=True)
+
+            for idx, (_, pp) in enumerate(pp_dates, start=1):
+                past_performances.append(
+                    _parse_past_performance(
+                        pp, race_id, horse_name or "", registration_number or "", idx
+                    )
+                )
+
+            # Workouts
+            for wo in starter.findall("Workout"):
+                workouts.append(
+                    _parse_workout(wo, race_id, horse_name or "", registration_number or "")
+                )
+
+    return entries, past_performances, workouts

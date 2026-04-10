@@ -1,0 +1,33 @@
+[project]
+name = "horse-racing"
+version = "0.1.0"
+description = "Horse racing prediction system"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi",
+    "joblib",
+    "openpyxl",
+    "pandas",
+    "plotly",
+    "polars",
+    "pyarrow",
+    "pydantic",
+    "scikit-learn",
+    "uvicorn",
+    "xgboost",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx",
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["data*", "model*", "api*"]
+
+[tool.black]
+preview = true
+enable-unstable-feature = ["hug_parens_with_braces_and_square_brackets"]
+color = true

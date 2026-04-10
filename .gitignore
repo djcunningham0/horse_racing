@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.so
+
+# Virtual environments
+venv_horse_racing/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
+data/raw/*
+data/processed/*
+model/artifacts/*
+!**/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment
+.env
+
+# Claude
+CLAUDE.local.md
