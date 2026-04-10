@@ -129,7 +129,7 @@ def split_by_race(
     for the current baseline feature set — none of the features are keyed on
     horse/jockey/trainer identity, so no cross-split leakage.
     """
-    race_ids = df["race_id"].unique().to_numpy()
+    race_ids = np.sort(df["race_id"].unique().to_numpy())
     rng = np.random.default_rng(seed)
     rng.shuffle(race_ids)
     n = len(race_ids)
