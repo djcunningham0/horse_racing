@@ -25,9 +25,7 @@ def _softmax(x: np.ndarray) -> np.ndarray:
     return e / e.sum()
 
 
-def _per_race_softmax(
-    df: pl.DataFrame, score_col: str, out_col: str
-) -> pl.DataFrame:
+def _per_race_softmax(df: pl.DataFrame, score_col: str, out_col: str) -> pl.DataFrame:
     """Add `out_col`: softmax of `score_col` within each race."""
     out_frames = []
     for (_race_id,), group in df.group_by("race_id"):
@@ -90,9 +88,7 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict:
     test_df = _market_probs(test_df)
 
     # Drop races with no winner in the test set (shouldn't happen, but safe).
-    test_df = test_df.filter(
-        pl.col("won").max().over("race_id") == 1
-    )
+    test_df = test_df.filter(pl.col("won").max().over("race_id") == 1)
 
     metrics = {
         "n_races": int(test_df["race_id"].n_unique()),
@@ -125,7 +121,9 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     evaluate()
 
 

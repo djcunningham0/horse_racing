@@ -26,5 +26,10 @@ def parse_track_codes(xlsx_path: Path) -> pl.DataFrame:
             })
 
     wb.close()
-    schema = {"country": pl.Utf8, "track_id": pl.Utf8, "track_name": pl.Utf8, "state": pl.Utf8}
+    schema = {
+        "country": pl.Utf8,
+        "track_id": pl.Utf8,
+        "track_name": pl.Utf8,
+        "state": pl.Utf8,
+    }
     return pl.DataFrame(rows, schema=schema)

@@ -15,7 +15,11 @@ def _parse_date(date_str: str | None) -> str | None:
 
 
 def _parse_past_performance(
-    pp: ET.Element, race_id: str, horse_name: str, registration_number: str, pp_index: int
+    pp: ET.Element,
+    race_id: str,
+    horse_name: str,
+    registration_number: str,
+    pp_index: int,
 ) -> dict:
     """Extract fields from a PastPerformance element."""
     start = pp.find("Start")
@@ -52,10 +56,19 @@ def _parse_past_performance(
         row["pp_pace_figure_3"] = safe_int(xml_text(start, "PaceFigure3"))
     else:
         for key in [
-            "pp_post_position", "pp_official_finish", "pp_speed_figure", "pp_odds",
-            "pp_weight_carried", "pp_class_rating", "pp_jockey_last_name",
-            "pp_trainer_last_name", "pp_long_comment", "pp_short_comment",
-            "pp_pace_figure_1", "pp_pace_figure_2", "pp_pace_figure_3",
+            "pp_post_position",
+            "pp_official_finish",
+            "pp_speed_figure",
+            "pp_odds",
+            "pp_weight_carried",
+            "pp_class_rating",
+            "pp_jockey_last_name",
+            "pp_trainer_last_name",
+            "pp_long_comment",
+            "pp_short_comment",
+            "pp_pace_figure_1",
+            "pp_pace_figure_2",
+            "pp_pace_figure_3",
         ]:
             row[key] = None
 
@@ -173,7 +186,9 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
             entry["apprentice_weight_allowance"] = safe_int(
                 xml_text(starter, "ApprenticeWeightAllowance")
             )
-            entry["class_rating"] = safe_int(xml_text(starter, "TodaysHorseClassRating"))
+            entry["class_rating"] = safe_int(
+                xml_text(starter, "TodaysHorseClassRating")
+            )
 
             entries.append(entry)
 
@@ -195,7 +210,9 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
             # Workouts
             for wo in starter.findall("Workout"):
                 workouts.append(
-                    _parse_workout(wo, race_id, horse_name or "", registration_number or "")
+                    _parse_workout(
+                        wo, race_id, horse_name or "", registration_number or ""
+                    )
                 )
 
     return entries, past_performances, workouts

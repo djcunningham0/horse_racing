@@ -25,9 +25,7 @@ def _prepare(df: pl.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     df = df.sort("race_id")
     X = df.select(FEATURE_COLUMNS).to_numpy()
     y = df["won"].to_numpy()
-    group_sizes = (
-        df.group_by("race_id", maintain_order=True).len()["len"].to_numpy()
-    )
+    group_sizes = df.group_by("race_id", maintain_order=True).len()["len"].to_numpy()
     return X, y, group_sizes
 
 
@@ -71,7 +69,9 @@ def train(model_dir: Path = DEFAULT_MODEL_DIR) -> XGBRanker:
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
     train()
 
 

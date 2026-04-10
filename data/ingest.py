@@ -195,7 +195,9 @@ def ingest_results(raw_dir: Path, output_dir: Path):
             errors += 1
             logger.warning(f"Failed to parse {path.name}", exc_info=True)
         if i % 500 == 0:
-            logger.info(f"  Parsed {i}/{len(xml_files)} result charts ({len(rows)} rows)")
+            logger.info(
+                f"  Parsed {i}/{len(xml_files)} result charts ({len(rows)} rows)"
+            )
 
     df = _to_dataframe(rows, RESULTS_SCHEMA)
     out_path = output_dir / "results.parquet"
@@ -229,7 +231,8 @@ def ingest_entries(raw_dir: Path, output_dir: Path):
         if i % 500 == 0:
             logger.info(
                 f"  Parsed {i}/{len(zip_files)} PPS files "
-                f"({len(all_entries)} entries, {len(all_pps)} PPs, {len(all_workouts)} workouts)"
+                f"({len(all_entries)} entries, {len(all_pps)} PPs, {len(all_workouts)} "
+                f"workouts)"
             )
 
     for name, data, schema in [
@@ -262,12 +265,16 @@ def ingest_params(raw_dir: Path, output_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Ingest Equibase data into Parquet files")
+    parser = argparse.ArgumentParser(
+        description="Ingest Equibase data into Parquet files"
+    )
     parser.add_argument("--raw-dir", type=Path, default=DEFAULT_RAW_DIR)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
 

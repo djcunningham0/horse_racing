@@ -102,7 +102,9 @@ def build_training_frame(
             .dt.total_days()
             .alias("days_since_last"),
             pl.col("num_prior_starts").fill_null(0),
-            pl.col("surface").replace_strict(SURFACE_MAP, default=None).alias("surface_int"),
+            pl.col("surface")
+            .replace_strict(SURFACE_MAP, default=None)
+            .alias("surface_int"),
             pl.col("num_runners").alias("field_size"),
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
         )
