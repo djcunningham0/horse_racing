@@ -42,7 +42,7 @@ def train(model_dir: Path = DEFAULT_MODEL_DIR) -> XGBRanker:
     )
 
     model = XGBRanker(
-        objective="rank:pairwise",
+        objective="rank:ndcg",
         tree_method="hist",
         n_estimators=500,
         learning_rate=0.05,
@@ -50,7 +50,7 @@ def train(model_dir: Path = DEFAULT_MODEL_DIR) -> XGBRanker:
         subsample=0.8,
         colsample_bytree=0.8,
         early_stopping_rounds=30,
-        eval_metric="ndcg@1",
+        eval_metric="ndcg@3",
     )
     model.fit(
         X_tr,
