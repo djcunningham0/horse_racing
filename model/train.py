@@ -12,7 +12,7 @@ import numpy as np
 import polars as pl
 from xgboost import XGBRanker
 
-from model.features import FEATURE_COLUMNS, build_training_frame, split_by_race
+from model.features import FEATURE_COLUMNS, build_training_df, split_by_race
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def _prepare(df: pl.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def train(model_dir: Path = DEFAULT_MODEL_DIR) -> XGBRanker:
-    df = build_training_frame()
+    df = build_training_df()
     train_df, val_df, _ = split_by_race(df)
 
     X_tr, y_tr, g_tr = _prepare(train_df)

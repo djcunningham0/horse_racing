@@ -62,7 +62,7 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def build_training_frame(
+def build_training_df(
     processed_dir: Path = DEFAULT_PROCESSED_DIR,
 ) -> pl.DataFrame:
     """Assemble one row per horse-in-a-race with features and label."""
