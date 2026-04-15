@@ -70,6 +70,8 @@ def list_races(request: Request) -> list[RaceSummary]:
             race_id=race.race_id,
             track=race.track,
             race_number=race.race_number,
+            distance=race.distance,
+            surface=race.surface,
             num_runners=len(_active_runners(race)),
         )
         for race in races.values()

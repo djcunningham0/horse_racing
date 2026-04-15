@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Horse Racing Predictor</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="app.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+</head>
+<body x-data="horseApp()">
+
+  <!-- Error banner (shared across screens) -->
+  <div x-show="error" x-cloak class="error-banner" x-text="error" @click="clearError()"></div>
+
+  <!-- ==================== SCREEN 1: Race List ==================== -->
+  <div x-show="screen === 'list'">
+    <h1>Races</h1>
+
+    <div x-show="loading" class="loading">Loading races...</div>
+
+    <div x-show="!loading && races.length === 0" class="empty">
+      No races loaded yet.<br>Create races via the API.
+    </div>
+
+    <template x-for="race in races" :key="race.race_id">
+      <div class="race-card" @click="selectRace(race.race_id)">
+        <div>
+          <div class="race-card-title" x-text="'R' + race.race_number"></div>
+          <div class="race-card-meta">
+            <span x-text="race.distance + 'f'"></span>
+            &middot;
+            <span x-text="surfaceLabel(race.surface)"></span>
+          </div>
+        </div>
+        <div class="race-card-meta" x-text="race.num_runners + ' runners'"></div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ==================== SCREEN 2: Race Detail / Odds Entry ==================== -->
+  <div x-show="screen === 'detail'">
+    <button class="back-btn" @click="backToList()">&larr; Races</button>
+
+    <h2>
+      <span x-text="'Race ' + currentRace?.race_number"></span>
+      <span style="font-weight: 400; font-size: 16px; color: var(--text-secondary);"
+            x-text="currentRace ? currentRace.distance + 'f ' + surfaceLabel(currentRace.surface) : ''">
+      </span>
+    </h2>
+
+    <template x-for="runner in currentRace?.runners" :key="runner.post_position">
+      <div class="runner-row" :class="{ scratched: runner.scratched }">
+        <div class="runner-pp" x-text="runner.post_position"></div>
+        <div>
+          <div class="runner-name" x-text="runner.horse_name"></div>
+          <div class="runner-info">
+            ML <span x-text="fmtOdds(runner.morning_line_decimal - 1)"></span>-1
+            <template x-if="runner.speed_fig_last1 != null">
+              <span>&middot; SPD <span x-text="runner.speed_fig_last1"></span></span>
+            </template>
+          </div>
+        </div>
+        <input class="odds-input"
+               type="number"
+               inputmode="decimal"
+               step="any"
+               min="0.1"
+               x-model.number="runner.tote_odds"
+               :disabled="runner.scratched"
+               placeholder="odds">
+        <button class="scratch-btn"
+                :class="{ 'is-scratched': runner.scratched }"
+                @click="toggleScratch(runner)">
+          SCR
+        </button>
+      </div>
+    </template>
+
+    <button class="primary-btn" @click="submitOdds()" :disabled="loading">
+      <span x-show="!loading">Get Predictions</span>
+      <span x-show="loading">Loading...</span>
+    </button>
+  </div>
+
+  <!-- ==================== SCREEN 3: Predictions ==================== -->
+  <div x-show="screen === 'predictions'">
+    <button class="back-btn" @click="backToDetail()">&larr; Edit Odds</button>
+
+    <h2>
+      <span>Predictions</span>
+      <span style="font-weight: 400; font-size: 16px; color: var(--text-secondary);"
+            x-text="currentRace ? 'Race ' + currentRace.race_number : ''">
+      </span>
+    </h2>
+
+    <template x-for="(pred, i) in predictions?.predictions" :key="pred.post_position">
+      <div class="prediction-card" :class="{ 'top-pick': i < 2 && pred.ev_per_dollar > 0 }">
+        <div>
+          <span class="bet-badge"
+                :class="pred.ev_per_dollar > 0 ? 'bet' : 'skip'"
+                x-text="pred.ev_per_dollar > 0 ? 'BET' : 'SKIP'">
+          </span>
+        </div>
+        <div>
+          <div class="pred-name">
+            <span x-text="'#' + pred.post_position"></span>
+            <span x-text="pred.horse_name"></span>
+          </div>
+          <div class="pred-stats">
+            Model <span x-text="fmtProb(pred.model_prob)"></span>
+            &middot; Market <span x-text="fmtProb(pred.market_prob)"></span>
+            &middot; Edge <span x-text="fmtProb(pred.edge)"></span>
+          </div>
+        </div>
+        <div class="pred-ev" :class="pred.ev_per_dollar > 0 ? 'positive' : 'negative'"
+             x-text="fmtEv(pred.ev_per_dollar)">
+        </div>
+      </div>
+    </template>
+  </div>
+
+</body>
+</html>

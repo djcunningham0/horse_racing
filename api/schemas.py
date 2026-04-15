@@ -1,8 +1,10 @@
 """Pydantic request/response models for the prediction API."""
 
-from typing import Literal
+from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
+
+SurfaceType: TypeAlias = Literal["D", "T"]
 
 
 class StaticRunnerInput(BaseModel):
@@ -33,7 +35,7 @@ class RunnerInput(StaticRunnerInput):
 class RaceRequest(BaseModel):
     race_id: str = ""
     distance: float = Field(description="Distance in furlongs")
-    surface: Literal["D", "T"] = Field(description="'D' for dirt, 'T' for turf")
+    surface: SurfaceType = Field(description="'D' for dirt, 'T' for turf")
     runners: list[RunnerInput] = Field(min_length=2)
 
 
@@ -58,7 +60,7 @@ class CreateRaceRequest(BaseModel):
     track: str = Field(description="Track code, e.g. 'CD'")
     race_number: int = Field(ge=1)
     distance: float = Field(description="Distance in furlongs")
-    surface: Literal["D", "T"] = Field(description="'D' for dirt, 'T' for turf")
+    surface: SurfaceType = Field(description="'D' for dirt, 'T' for turf")
     runners: list[StaticRunnerInput] = Field(min_length=2)
 
 
@@ -78,7 +80,7 @@ class StoredRace(BaseModel):
     track: str
     race_number: int
     distance: float
-    surface: Literal["D", "T"]
+    surface: SurfaceType
     runners: list[StoredRunner]
 
 
@@ -95,4 +97,6 @@ class RaceSummary(BaseModel):
     race_id: str
     track: str
     race_number: int
+    distance: float
+    surface: SurfaceType
     num_runners: int

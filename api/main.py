@@ -3,6 +3,8 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.predict import load_model, predict_race
 from api.races import router as races_router
@@ -17,6 +19,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Horse Racing Predictor", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: restrict in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(races_router)
 
 
@@ -29,3 +37,8 @@ def health():
 def predict(race_request: RaceRequest, request: Request) -> PredictionResponse:
     predictions = predict_race(race_request, request.app.state.model_bundle)
     return PredictionResponse(race_id=race_request.race_id, predictions=predictions)
+
+
+# serve the frontend from the `frontend/` directory (this line must be after all routes
+# have been defined))
+app.mount("/app", StaticFiles(directory="frontend", html=True), name="frontend")
