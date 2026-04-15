@@ -5,16 +5,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 
 from api.predict import load_model, predict_race
+from api.races import router as races_router
 from api.schemas import PredictionResponse, RaceRequest
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.model_bundle = load_model()
+    app.state.races = {}
     yield
 
 
 app = FastAPI(title="Horse Racing Predictor", lifespan=lifespan)
+app.include_router(races_router)
 
 
 @app.get("/health")
