@@ -32,7 +32,7 @@ DEFAULT_HYPERPARAMS = {
 }
 
 
-def _prepare(
+def prepare_df(
     df: pl.DataFrame, features: list[str]
 ) -> tuple[pl.DataFrame, np.ndarray, np.ndarray]:
     """Return (X, y, group_sizes) sorted by race_id so XGBRanker groups align."""
@@ -51,8 +51,8 @@ def train(
 ) -> XGBRanker:
     params = {**DEFAULT_HYPERPARAMS, **(hyperparameters or {})}
 
-    X_tr, y_tr, g_tr = _prepare(train_df, features)
-    X_va, y_va, g_va = _prepare(val_df, features)
+    X_tr, y_tr, g_tr = prepare_df(train_df, features)
+    X_va, y_va, g_va = prepare_df(val_df, features)
 
     logger.info(
         f"train: {len(y_tr):,} rows / {len(g_tr):,} races | "
