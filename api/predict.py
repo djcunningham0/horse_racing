@@ -11,9 +11,12 @@ from model.train import DEFAULT_MODEL_DIR, MODEL_FILENAME
 from api.schemas import RaceRequest, RunnerPrediction
 
 
-def load_model(model_dir: Path = DEFAULT_MODEL_DIR) -> dict:
+def load_model(
+    model_dir: Path = DEFAULT_MODEL_DIR,
+    model_filename: str = MODEL_FILENAME,
+) -> dict:
     """Load the serialized model bundle (model + feature list)."""
-    return joblib.load(model_dir / MODEL_FILENAME)
+    return joblib.load(model_dir / model_filename)
 
 
 def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPrediction]:
