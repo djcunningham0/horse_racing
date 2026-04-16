@@ -34,10 +34,10 @@ DEFAULT_HYPERPARAMS = {
 
 def _prepare(
     df: pl.DataFrame, features: list[str]
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[pl.DataFrame, np.ndarray, np.ndarray]:
     """Return (X, y, group_sizes) sorted by race_id so XGBRanker groups align."""
     df = df.sort("race_id")
-    X = df.select(features).to_numpy()
+    X = df.select(features)
     y = df["won"].to_numpy()
     group_sizes = df.group_by("race_id", maintain_order=True).len()["len"].to_numpy()
     return X, y, group_sizes
