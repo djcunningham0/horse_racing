@@ -32,7 +32,7 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
         avg_speed = float(np.mean(valid_figs)) if valid_figs else np.nan
 
         row = {
-            "morning_line_decimal": r.morning_line_decimal,
+            "morning_line_odds_float": r.morning_line_odds,
             "post_position": r.post_position,
             "weight_carried": r.weight_carried,
             "field_size": field_size,

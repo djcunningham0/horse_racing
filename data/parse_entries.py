@@ -161,7 +161,7 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
 
             odds_raw = xml_text(starter, "Odds")
             entry["morning_line_odds"] = odds_raw
-            entry["morning_line_decimal"] = parse_odds(odds_raw)
+            entry["morning_line_odds_float"] = parse_odds(odds_raw)
 
             entry["weight_carried"] = safe_int(xml_text(starter, "WeightCarried"))
 

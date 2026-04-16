@@ -11,7 +11,7 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 SURFACE_MAP = {"D": 0, "T": 1}
 
 DEFAULT_FEATURE_COLS: list[str] = [
-    "morning_line_decimal",
+    "morning_line_odds_float",
     "post_position",
     "weight_carried",
     "field_size",
@@ -86,7 +86,7 @@ def build_training_df(
     entry_cols = entries.select(
         "race_id",
         "horse_name",
-        "morning_line_decimal",
+        "morning_line_odds_float",
         "post_position",
         "weight_carried",
         "class_rating",

@@ -55,7 +55,7 @@
         <div>
           <div class="runner-name" x-text="runner.horse_name"></div>
           <div class="runner-info">
-            ML <span x-text="fmtOdds(runner.morning_line_decimal - 1)"></span>-1
+            ML <span x-text="fmtOdds(runner.morning_line_odds)"></span>-1
             <template x-if="runner.speed_fig_last1 != null">
               <span>&middot; SPD <span x-text="runner.speed_fig_last1"></span></span>
             </template>

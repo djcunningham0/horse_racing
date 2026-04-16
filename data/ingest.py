@@ -97,7 +97,7 @@ ENTRIES_SCHEMA = {
     "post_position": pl.Int64,
     "program_number": pl.Utf8,
     "morning_line_odds": pl.Utf8,
-    "morning_line_decimal": pl.Float64,
+    "morning_line_odds_float": pl.Float64,
     "weight_carried": pl.Int64,
     "jockey_first_name": pl.Utf8,
     "jockey_last_name": pl.Utf8,

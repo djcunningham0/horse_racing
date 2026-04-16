@@ -12,8 +12,8 @@ class StaticRunnerInput(BaseModel):
 
     horse_name: str
     post_position: int
-    morning_line_decimal: float = Field(
-        description="Morning line in decimal odds, i.e. total payout per $1 (e.g. 6.0)"
+    morning_line_odds: float = Field(
+        description="Morning line odds as X-to-1 (e.g. 5.0 for 5-1)"
     )
     weight_carried: int
     class_rating: float
@@ -28,7 +28,7 @@ class RunnerInput(StaticRunnerInput):
     """Full runner input including live tote odds."""
 
     tote_odds: float = Field(
-        description="Current tote board odds as X-to-1 (e.g. 5.0 for 5-1; decimal odds = tote_odds + 1)"
+        description="Current tote board odds as X-to-1 (e.g. 5.0 for 5-1)"
     )
 
 

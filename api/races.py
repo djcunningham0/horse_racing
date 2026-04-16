@@ -47,7 +47,7 @@ def create_race(body: CreateRaceRequest, request: Request) -> CreateRaceResponse
         raise HTTPException(status_code=409, detail=f"Race '{race_id}' already exists")
 
     runners = [
-        StoredRunner(**r.model_dump(), tote_odds=r.morning_line_decimal - 1)
+        StoredRunner(**r.model_dump(), tote_odds=r.morning_line_odds)
         for r in body.runners
     ]
     race = StoredRace(

@@ -14,9 +14,7 @@ class TestCreateRace:
         r = client.get("/races/CD-R1")
         race = r.json()
         for runner in race["runners"]:
-            # tote_odds should be morning_line_decimal - 1
-            expected = runner["morning_line_decimal"] - 1
-            assert runner["tote_odds"] == expected
+            assert runner["tote_odds"] == runner["morning_line_odds"]
 
     def test_duplicate_race(self, client):
         client.post("/races", json=sample_race_body())
@@ -60,8 +58,8 @@ class TestUpdateOdds:
         assert r.status_code == 200
         runners = {x["post_position"]: x for x in r.json()["runners"]}
         assert runners[1]["tote_odds"] == 3.5
-        # runner 2 still has morning line default (morning_line_decimal - 1 = 6.0)
-        assert runners[2]["tote_odds"] == 6.0
+        # runner 2 still has morning line default
+        assert runners[2]["tote_odds"] == 7.0
 
     def test_update_all_odds(self, client):
         client.post("/races", json=sample_race_body())

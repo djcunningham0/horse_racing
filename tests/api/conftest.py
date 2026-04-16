@@ -31,7 +31,7 @@ def sample_race_body(
         {
             "horse_name": f"Horse {i}",
             "post_position": i,
-            "morning_line_decimal": 5.0 + i,
+            "morning_line_odds": 5.0 + i,
             "weight_carried": 122,
             "class_rating": 75.0,
             "speed_fig_last1": 80.0 + i,
