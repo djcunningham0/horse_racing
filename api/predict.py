@@ -5,7 +5,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 
-from model.features import DEFAULT_FEATURE_COLS, SURFACE_MAP
+from model.features import DEFAULT_FEATURE_COLS
 from model.train import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 from api.schemas import RaceRequest, RunnerPrediction
@@ -37,7 +37,7 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
             "weight_carried": r.weight_carried,
             "field_size": field_size,
             "distance": request.distance,
-            "surface_int": SURFACE_MAP.get(request.surface),
+            "is_turf": int(request.surface == "T"),
             "class_rating": r.class_rating,
             "speed_fig_L1": _nan_if_none(r.speed_fig_last1),
             "speed_fig_L2": _nan_if_none(r.speed_fig_last2),

@@ -7,16 +7,13 @@ import polars as pl
 
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 
-# Surface encoding (results.surface is "D" or "T").
-SURFACE_MAP = {"D": 0, "T": 1}
-
 DEFAULT_FEATURE_COLS: list[str] = [
     "morning_line_odds_float",
     "post_position",
     "weight_carried",
     "field_size",
     "distance",
-    "surface_int",
+    "is_turf",
     "class_rating",
     "speed_fig_L1",
     "speed_fig_L2",
@@ -102,9 +99,7 @@ def build_training_df(
             .dt.total_days()
             .alias("days_since_last"),
             pl.col("num_prior_starts").fill_null(0),
-            pl.col("surface")
-            .replace_strict(SURFACE_MAP, default=None)
-            .alias("surface_int"),
+            (pl.col("surface") == "T").cast(pl.Int8).alias("is_turf"),
             pl.col("num_runners").alias("field_size"),
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
         )
