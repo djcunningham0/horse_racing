@@ -5,7 +5,7 @@ from pathlib import Path
 import joblib
 import numpy as np
 
-from model.features import FEATURE_COLUMNS, SURFACE_MAP
+from model.features import DEFAULT_FEATURE_COLS, SURFACE_MAP
 from model.train import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 from api.schemas import RaceRequest, RunnerPrediction
@@ -46,7 +46,7 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
         }
 
         # ensure columns the necessary columns are present and in the right order
-        rows.append([row[col] for col in FEATURE_COLUMNS])
+        rows.append([row[col] for col in DEFAULT_FEATURE_COLS])
 
     X = np.array(rows, dtype=np.float32)
     scores = model.predict(X)

@@ -10,7 +10,7 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 # Surface encoding (results.surface is "D" or "T").
 SURFACE_MAP = {"D": 0, "T": 1}
 
-FEATURE_COLUMNS: list[str] = [
+DEFAULT_FEATURE_COLS: list[str] = [
     "morning_line_decimal",
     "post_position",
     "weight_carried",

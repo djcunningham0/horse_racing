@@ -97,7 +97,7 @@ def _metrics_for_split(split_df: pl.DataFrame, model, features: list[str]) -> di
     split_df = _per_race_softmax(split_df, "model_score", "model_prob")
     split_df = _market_probs(split_df)
 
-    # Drop races with no winner (shouldn't happen, but safe).
+    # drop races with no winner
     split_df = split_df.filter(pl.col("won").max().over("race_id") == 1)
 
     split_df = add_ev_columns(split_df)
@@ -126,7 +126,7 @@ def _metrics_for_split(split_df: pl.DataFrame, model, features: list[str]) -> di
     }
 
 
-def _print_metrics_table(metrics: dict[str, dict]):
+def print_metrics_table(metrics: dict[str, dict]):
     splits = list(metrics.keys())
     header = f"{'metric':<22}" + "".join(f"{s:>12}" for s in splits)
     print("\n=== Metrics by split ===")
@@ -151,7 +151,6 @@ def _print_metrics_table(metrics: dict[str, dict]):
 
 def _print_roi_table(metrics: dict[str, dict]):
     splits = list(metrics.keys())
-    # All splits have the same rules; use the first to get labels.
     rule_labels = list(metrics[splits[0]]["roi"].keys())
 
     print("\n=== ROI by bet rule ($2 flat stake) ===")
@@ -174,7 +173,23 @@ def _print_roi_table(metrics: dict[str, dict]):
             print(f"  {label:<24}" + "".join(vals))
 
 
+def evaluate_splits(
+    model,
+    features: list[str],
+    train_df: pl.DataFrame,
+    val_df: pl.DataFrame,
+    test_df: pl.DataFrame,
+) -> dict[str, dict]:
+    """Compute metrics on all three splits. Returns dict keyed by split name."""
+    return {
+        "train": _metrics_for_split(train_df, model, features),
+        "val": _metrics_for_split(val_df, model, features),
+        "test": _metrics_for_split(test_df, model, features),
+    }
+
+
 def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
+    """Load model from disk and evaluate. Convenience entrypoint."""
     bundle = joblib.load(model_dir / MODEL_FILENAME)
     model = bundle["model"]
     features = bundle["features"]
@@ -182,12 +197,8 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
     df = build_training_df()
     train_df, val_df, test_df = split_by_race(df)
 
-    metrics = {
-        "train": _metrics_for_split(train_df, model, features),
-        "val": _metrics_for_split(val_df, model, features),
-        "test": _metrics_for_split(test_df, model, features),
-    }
-    _print_metrics_table(metrics)
+    metrics = evaluate_splits(model, features, train_df, val_df, test_df)
+    print_metrics_table(metrics)
     return metrics
 
 

@@ -15,6 +15,7 @@ dependencies = [
     "scikit-learn",
     "uvicorn",
     "xgboost",
+    "mlflow",
 ]
 
 [project.optional-dependencies]
