@@ -22,6 +22,8 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "days_since_last",
     "num_prior_starts",
     "is_first_start",
+    "dollar_odds_plus_noise",
+    "purse",
 ]
 
 
@@ -59,6 +61,61 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _dollar_odds_plus_noise(
+    dollar_odds: pl.Expr,
+    morning_line: pl.Expr,
+    p_exact: float = 0.25,
+    p_interior: float = 0.75,
+) -> pl.Expr:
+    """
+    Simulate mid-pool odds. With some probability `p_exact` use the final odds exactly.
+    Otherwise, add random noise between the final odds and the morning line (interior)
+    with probability `p_interior`, or between the final odds and 20% better than the
+    morning line (overshoot) with probability `1 - p_interior`.
+
+    Rounded to nearest 0.5 to mimic tote board increments.
+    """
+    return pl.struct(dollar_odds, morning_line).map_batches(
+        lambda s: _compute_odds_noise(s, p_exact, p_interior),
+        return_dtype=pl.Float64,
+    )
+
+
+def _compute_odds_noise(s: pl.Series, p_exact: float, p_interior: float) -> pl.Series:
+    """
+    Row-level random noise simulating non-final tote odds.
+
+    Suppose p_exact = 0.5 and p_interior = 0.75. Then:
+    - 50%: use final odds exactly
+    - 37.5%: uniform between final and ML (interior)
+    - 12.5%: uniform between final and 20% better than ML (overshoot)
+    """
+    df = s.struct.unnest()
+    dollar_odds = df["dollar_odds"].to_numpy(zero_copy_only=False).astype(float)
+    ml_odds = df["morning_line_odds_float"].to_numpy(zero_copy_only=False).astype(float)
+
+    n = len(dollar_odds)
+    rng = np.random.default_rng()
+    roll_1 = rng.random(n)
+    roll_2 = rng.random(n)
+    noise = rng.random(n)
+    diff = ml_odds - dollar_odds
+
+    # p_exact final; otherwise p_interior between final and ML, 1 - p_interior overshoot
+    noisy_odds = np.where(
+        roll_1 < p_exact,
+        dollar_odds,
+        np.where(
+            roll_2 < p_interior,
+            dollar_odds + noise * diff,  # interior
+            dollar_odds - noise * 0.2 * diff,  # overshoot past final
+        ),
+    )
+    noisy_odds = np.round(noisy_odds, 1)  # round to nearest 0.1
+    noisy_odds = np.maximum(noisy_odds, 0.05)  # floor at lowest observed odds
+    return pl.Series(noisy_odds)
+
+
 def build_training_df(
     processed_dir: Path = DEFAULT_PROCESSED_DIR,
 ) -> pl.DataFrame:
@@ -87,6 +144,7 @@ def build_training_df(
         "post_position",
         "weight_carried",
         "class_rating",
+        "purse",
     )
 
     pp_feats = _pp_features(pp)
@@ -105,6 +163,11 @@ def build_training_df(
         )
         .with_columns(
             (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
+        )
+        .with_columns(
+            _dollar_odds_plus_noise(
+                pl.col("dollar_odds"), pl.col("morning_line_odds_float")
+            ).alias("dollar_odds_plus_noise"),
         )
         .drop("last_pp_date")
     )
