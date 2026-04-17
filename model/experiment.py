@@ -147,17 +147,17 @@ def _log_feature_importance(model, features: list[str], val_df):
 
         # SHAP bar chart
         fig, ax = plt.subplots()
-        shap.plots.bar(explanation, ax=ax)
+        shap.plots.bar(explanation, ax=ax, show=False)
         shap_bar_path = tmp_path / "feature_importance_shap_bar.png"
-        fig.savefig(shap_bar_path, dpi=100)
+        fig.savefig(shap_bar_path, dpi=100, bbox_inches="tight")
         plt.close(fig)
         mlflow.log_artifact(str(shap_bar_path))
 
         # SHAP beeswarm plot
         fig, ax = plt.subplots()
-        shap.plots.beeswarm(explanation, max_display=20, ax=ax)
+        shap.plots.beeswarm(explanation, max_display=20, show=False)
         shap_beeswarm_path = tmp_path / "feature_importance_shap_beeswarm.png"
-        fig.savefig(shap_beeswarm_path, dpi=100)
+        fig.savefig(shap_beeswarm_path, dpi=100, bbox_inches="tight")
         plt.close(fig)
         mlflow.log_artifact(str(shap_beeswarm_path))
 
