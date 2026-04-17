@@ -151,6 +151,7 @@ def build_training_df(
 
     df = (
         race_cols.join(entry_cols, on=["race_id", "horse_name"], how="inner")
+        .filter(pl.col("dollar_odds") > 0)
         .join(pp_feats, on=["race_id", "horse_name"], how="left")
         .with_columns(
             (pl.col("race_date") - pl.col("last_pp_date"))
