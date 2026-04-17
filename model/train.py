@@ -22,11 +22,12 @@ MODEL_FILENAME = "xgb_ranker_v1.joblib"
 DEFAULT_HYPERPARAMS = {
     "objective": "rank:ndcg",
     "tree_method": "hist",
-    "n_estimators": 500,
+    "n_estimators": 800,
     "learning_rate": 0.05,
-    "max_depth": 6,
+    "max_depth": 4,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
+    "min_child_weight": 2,
     "early_stopping_rounds": 30,
     "eval_metric": "ndcg@3",
 }
