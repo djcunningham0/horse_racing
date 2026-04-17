@@ -19,6 +19,10 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "speed_fig_L2",
     "speed_fig_L3",
     "avg_speed_fig_L3",
+    "class_rating_L1",
+    "class_rating_L2",
+    "class_rating_L3",
+    "avg_class_rating_L3",
     "days_since_last",
     "num_prior_starts",
     "is_first_start",
@@ -36,6 +40,7 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
         pp.with_columns(pl.col("pp_race_date").str.to_date())
         .group_by(["race_id", "horse_name"])
         .agg(
+            # speed
             pl.col("pp_speed_figure")
             .filter(pl.col("pp_index") == 1)
             .first()
@@ -52,10 +57,74 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .filter(pl.col("pp_index") <= 3)
             .mean()
             .alias("avg_speed_fig_L3"),
+
+            # class rating
+            pl.col("pp_class_rating")
+            .filter(pl.col("pp_index") == 1)
+            .first()
+            .alias("class_rating_L1"),
+            pl.col("pp_class_rating")
+            .filter(pl.col("pp_index") == 2)
+            .first()
+            .alias("class_rating_L2"),
+            pl.col("pp_class_rating")
+            .filter(pl.col("pp_index") == 3)
+            .first()
+            .alias("class_rating_L3"),
+            pl.col("pp_class_rating")
+            .filter(pl.col("pp_index") <= 3)
+            .mean()
+            .alias("avg_class_rating_L3"),
+
+            # official finish
+            pl.col("pp_official_finish")
+            .filter(pl.col("pp_index") == 1)
+            .first()
+            .alias("official_finish_L1"),
+            pl.col("pp_official_finish")
+            .filter(pl.col("pp_index") == 2)
+            .first()
+            .alias("official_finish_L2"),
+            pl.col("pp_official_finish")
+            .filter(pl.col("pp_index") == 3)
+            .first()
+            .alias("official_finish_L3"),
+
+            # num starters
+            pl.col("pp_num_starters")
+            .filter(pl.col("pp_index") == 1)
+            .first()
+            .alias("num_starters_L1"),
+            pl.col("pp_num_starters")
+            .filter(pl.col("pp_index") == 2)
+            .first()
+            .alias("num_starters_L2"),
+            pl.col("pp_num_starters")
+            .filter(pl.col("pp_index") == 3)
+            .first()
+            .alias("num_starters_L3"),
+
+            # distance
+            pl.col("pp_distance_id")
+            .filter(pl.col("pp_index") == 1)
+            .first()
+            .alias("distance_L1"),
+            pl.col("pp_distance_id")
+            .filter(pl.col("pp_index") == 2)
+            .first()
+            .alias("distance_L2"),
+            pl.col("pp_distance_id")
+            .filter(pl.col("pp_index") == 3)
+            .first()
+            .alias("distance_L3"),
+
+            # date of last race
             pl.col("pp_race_date")
             .filter(pl.col("pp_index") == 1)
             .first()
             .alias("last_pp_date"),
+
+            # count of prior starts
             pl.len().alias("num_prior_starts"),
         )
     )
