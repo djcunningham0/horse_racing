@@ -23,6 +23,13 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "class_rating_L2",
     "class_rating_L3",
     "avg_class_rating_L3",
+    "official_finish_L1",
+    "official_finish_L2",
+    "official_finish_L3",
+    "relative_finish_L1",
+    "relative_finish_L2",
+    "relative_finish_L3",
+    "avg_relative_finish",
     "days_since_last",
     "num_prior_starts",
     "is_first_start",
@@ -36,8 +43,10 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
 
     pp_index == 1 is the most recent prior race.
     """
+    # fmt: off
     return (
-        pp.with_columns(pl.col("pp_race_date").str.to_date())
+        pp
+        .with_columns(pl.col("pp_race_date").str.to_date())
         .group_by(["race_id", "horse_name"])
         .agg(
             # speed
@@ -127,13 +136,23 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             # count of prior starts
             pl.len().alias("num_prior_starts"),
         )
+        .with_columns(
+            # relative finish
+            (pl.col("official_finish_L1") / pl.col("num_starters_L1")).alias("relative_finish_L1"),
+            (pl.col("official_finish_L2") / pl.col("num_starters_L2")).alias("relative_finish_L2"),
+            (pl.col("official_finish_L3") / pl.col("num_starters_L3")).alias("relative_finish_L3"),
+        )
+        .with_columns(
+            ((pl.col("relative_finish_L1") + pl.col("relative_finish_L2") + pl.col("relative_finish_L3")) / 3).alias("avg_relative_finish")
+        )
     )
+    # fmt: on
 
 
 def _dollar_odds_plus_noise(
     dollar_odds: pl.Expr,
     morning_line: pl.Expr,
-    p_exact: float = 0.25,
+    p_exact: float = 0.5,
     p_interior: float = 0.75,
 ) -> pl.Expr:
     """
