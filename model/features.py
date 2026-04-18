@@ -8,21 +8,41 @@ import polars as pl
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 
 DEFAULT_FEATURE_COLS: list[str] = [
+    # odds
     "morning_line_odds_float",
-    "post_position",
-    "weight_carried",
+    "dollar_odds_plus_noise",
+    # race characteristics
     "field_size",
     "distance",
     "is_turf",
-    "class_rating",
+    "race_class_rating",  # scale: 20-100+
+    "purse",
+    # entry characteristics
+    "post_position",
+    "weight_carried",
+    "entry_class_rating",  # scale: 300-800+
+    "entry_class_rating_minus_field_avg",
+    "entry_class_rating_to_field_avg_ratio",
+    "entry_to_race_class_ratio",
+    # PP speed
     "speed_fig_L1",
     "speed_fig_L2",
     "speed_fig_L3",
     "avg_speed_fig_L3",
-    "class_rating_L1",
+    "max_speed_fig_L3",
+    "speed_fig_trend",
+    "speed_fig_minus_field_avg_L1",
+    "speed_fig_to_field_avg_ratio_L1",
+    # PP class
+    "class_rating_L1",  # scale: 20-100+
     "class_rating_L2",
     "class_rating_L3",
     "avg_class_rating_L3",
+    "max_class_rating_L3",
+    "class_rating_diff_L1",
+    "class_rating_diff_avg_L3",
+    "class_rating_diff_max_L3",
+    # PP finishes
     "official_finish_L1",
     "official_finish_L2",
     "official_finish_L3",
@@ -30,11 +50,14 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "relative_finish_L2",
     "relative_finish_L3",
     "avg_relative_finish",
+    # PP distance
+    "distance_diff_L1",
+    "distance_diff_L2",
+    "distance_diff_L3",
+    # PP prior starts
     "days_since_last",
     "num_prior_starts",
     "is_first_start",
-    "dollar_odds_plus_noise",
-    "purse",
 ]
 
 
@@ -66,6 +89,10 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .filter(pl.col("pp_index") <= 3)
             .mean()
             .alias("avg_speed_fig_L3"),
+            pl.col("pp_speed_figure")
+            .filter(pl.col("pp_index") <= 3)
+            .max()
+            .alias("max_speed_fig_L3"),
 
             # class rating
             pl.col("pp_class_rating")
@@ -84,6 +111,10 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .filter(pl.col("pp_index") <= 3)
             .mean()
             .alias("avg_class_rating_L3"),
+            pl.col("pp_class_rating")
+            .filter(pl.col("pp_index") <= 3)
+            .max()
+            .alias("max_class_rating_L3"),
 
             # official finish
             pl.col("pp_official_finish")
@@ -141,6 +172,9 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             (pl.col("official_finish_L1") / pl.col("num_starters_L1")).alias("relative_finish_L1"),
             (pl.col("official_finish_L2") / pl.col("num_starters_L2")).alias("relative_finish_L2"),
             (pl.col("official_finish_L3") / pl.col("num_starters_L3")).alias("relative_finish_L3"),
+
+            # speed trend
+            (pl.col("speed_fig_L1") - pl.col("avg_speed_fig_L3")).alias("speed_fig_trend"),
         )
         .with_columns(
             ((pl.col("relative_finish_L1") + pl.col("relative_finish_L2") + pl.col("relative_finish_L3")) / 3).alias("avg_relative_finish")
@@ -204,9 +238,7 @@ def _compute_odds_noise(s: pl.Series, p_exact: float, p_interior: float) -> pl.S
     return pl.Series(noisy_odds)
 
 
-def build_training_df(
-    processed_dir: Path = DEFAULT_PROCESSED_DIR,
-) -> pl.DataFrame:
+def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFrame:
     """Assemble one row per horse-in-a-race with features and label."""
     entries = pl.read_parquet(processed_dir / "entries.parquet")
     results = pl.read_parquet(processed_dir / "results.parquet")
@@ -223,6 +255,7 @@ def build_training_df(
         "horse_name",
         "official_finish",
         "dollar_odds",
+        pl.col("class_rating").alias("race_class_rating"),
     ).with_columns(pl.col("race_date").str.to_date())
 
     entry_cols = entries.select(
@@ -231,20 +264,20 @@ def build_training_df(
         "morning_line_odds_float",
         "post_position",
         "weight_carried",
-        "class_rating",
+        pl.col("class_rating").alias("entry_class_rating"),
         "purse",
     )
 
     pp_feats = _pp_features(pp)
 
+    # fmt: off
     df = (
-        race_cols.join(entry_cols, on=["race_id", "horse_name"], how="inner")
+        race_cols
+        .join(entry_cols, on=["race_id", "horse_name"], how="inner")
         .filter(pl.col("dollar_odds") > 0)
         .join(pp_feats, on=["race_id", "horse_name"], how="left")
         .with_columns(
-            (pl.col("race_date") - pl.col("last_pp_date"))
-            .dt.total_days()
-            .alias("days_since_last"),
+            # simple encoding and renaming
             pl.col("num_prior_starts").fill_null(0),
             (pl.col("surface") == "T").cast(pl.Int8).alias("is_turf"),
             pl.col("num_runners").alias("field_size"),
@@ -254,12 +287,50 @@ def build_training_df(
             (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
         )
         .with_columns(
+            # simple derivations
+            (pl.col("entry_class_rating") / pl.col("race_class_rating")).alias("entry_to_race_class_ratio"),
+        )
+        .with_columns(
+            ### comparison to previous races
+            # date
+            (pl.col("race_date") - pl.col("last_pp_date"))
+            .dt.total_days()
+            .alias("days_since_last"),
+            # distance
+            (pl.col("distance") - pl.col("distance_L1")).alias("distance_diff_L1"),
+            (pl.col("distance") - pl.col("distance_L2")).alias("distance_diff_L2"),
+            (pl.col("distance") - pl.col("distance_L3")).alias("distance_diff_L3"),
+            # race class rating
+            (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
+            (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
+            (pl.col("race_class_rating") - pl.col("max_class_rating_L3")).alias("class_rating_diff_max_L3"),
+        )
+        .with_columns(
+            ### comparison to field (window functions)
+            # entry class rating
+            (
+                pl.col("entry_class_rating") - pl.col("entry_class_rating").mean().over("race_id")
+            ).alias("entry_class_rating_minus_field_avg"),
+            (
+                pl.col("entry_class_rating") / pl.col("entry_class_rating").mean().over("race_id")
+            ).alias("entry_class_rating_to_field_avg_ratio"),
+            # speed
+            (
+                pl.col("speed_fig_L1") - pl.col("speed_fig_L1").mean().over("race_id")
+            ).alias("speed_fig_minus_field_avg_L1"),
+            (
+                pl.col("speed_fig_L1") / pl.col("speed_fig_L1").mean().over("race_id")
+            ).alias("speed_fig_to_field_avg_ratio_L1"),
+        )
+        .with_columns(
+            # add noise to final odds to simulate mid-pool odds
             _dollar_odds_plus_noise(
                 pl.col("dollar_odds"), pl.col("morning_line_odds_float")
             ).alias("dollar_odds_plus_noise"),
         )
         .drop("last_pp_date")
     )
+    # fmt: on
     return df
 
 
