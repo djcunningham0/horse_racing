@@ -54,6 +54,18 @@ def _parse_past_performance(
         row["pp_pace_figure_1"] = safe_int(xml_text(start, "PaceFigure1"))
         row["pp_pace_figure_2"] = safe_int(xml_text(start, "PaceFigure2"))
         row["pp_pace_figure_3"] = safe_int(xml_text(start, "PaceFigure3"))
+
+        # point-of-call positions and lengths behind
+        for poc in start.findall("PointOfCall"):
+            which = xml_text(poc, "PointOfCall")
+            if which == "S":
+                row["pp_poc_start_pos"] = safe_int(xml_text(poc, "Position"))
+            elif which == "F":
+                row["pp_poc_final_pos"] = safe_int(xml_text(poc, "Position"))
+                row["pp_poc_final_behind"] = safe_int(xml_text(poc, "LengthsBehind"))
+            elif which in ("1", "2", "3", "4", "5"):
+                row[f"pp_poc_{which}_pos"] = safe_int(xml_text(poc, "Position"))
+                row[f"pp_poc_{which}_behind"] = safe_int(xml_text(poc, "LengthsBehind"))
     else:
         for key in [
             "pp_post_position",
@@ -156,6 +168,15 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
             entry["registration_number"] = registration_number
             entry["year_of_birth"] = safe_int(xml_text(horse_el, "YearOfBirth"))
             entry["sex"] = xml_text(horse_el, "Sex/Value")
+            sire_el = horse_el.find("Sire")
+            entry["sire_name"] = (
+                xml_text(sire_el, "HorseName") if sire_el is not None else None
+            )
+            dam_el = horse_el.find("Dam")
+            dam_sire_el = dam_el.find("Sire") if dam_el is not None else None
+            entry["dam_sire_name"] = (
+                xml_text(dam_sire_el, "HorseName") if dam_sire_el is not None else None
+            )
             entry["post_position"] = safe_int(xml_text(starter, "PostPosition"))
             entry["program_number"] = xml_text(starter, "ProgramNumber")
 

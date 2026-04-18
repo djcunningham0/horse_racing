@@ -98,6 +98,8 @@ ENTRIES_SCHEMA = {
     "registration_number": pl.Utf8,
     "year_of_birth": pl.Int64,
     "sex": pl.Utf8,
+    "sire_name": pl.Utf8,
+    "dam_sire_name": pl.Utf8,
     "post_position": pl.Int64,
     "program_number": pl.Utf8,
     "morning_line_odds": pl.Utf8,
@@ -140,6 +142,19 @@ PAST_PERFORMANCES_SCHEMA = {
     "pp_pace_figure_1": pl.Int64,
     "pp_pace_figure_2": pl.Int64,
     "pp_pace_figure_3": pl.Int64,
+    "pp_poc_start_pos": pl.Int64,
+    "pp_poc_1_pos": pl.Int64,
+    "pp_poc_1_behind": pl.Int64,
+    "pp_poc_2_pos": pl.Int64,
+    "pp_poc_2_behind": pl.Int64,
+    "pp_poc_3_pos": pl.Int64,
+    "pp_poc_3_behind": pl.Int64,
+    "pp_poc_4_pos": pl.Int64,
+    "pp_poc_4_behind": pl.Int64,
+    "pp_poc_5_pos": pl.Int64,
+    "pp_poc_5_behind": pl.Int64,
+    "pp_poc_final_pos": pl.Int64,
+    "pp_poc_final_behind": pl.Int64,
 }
 
 WORKOUTS_SCHEMA = {
