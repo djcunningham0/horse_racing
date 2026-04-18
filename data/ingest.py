@@ -142,15 +142,15 @@ WORKOUTS_SCHEMA = {
     "race_id": pl.Utf8,
     "horse_name": pl.Utf8,
     "registration_number": pl.Utf8,
-    "workout_date": pl.Utf8,
+    "workout_date": pl.Date,
     "workout_track": pl.Utf8,
     "workout_distance": pl.Utf8,
     "workout_time": pl.Utf8,
     "workout_type": pl.Utf8,
     "workout_course": pl.Utf8,
     "workout_track_condition": pl.Utf8,
-    "workout_ranking": pl.Utf8,
-    "workout_num_in_group": pl.Utf8,
+    "workout_ranking": pl.Int32,
+    "workout_num_in_group": pl.Int32,
     "workout_comment": pl.Utf8,
 }
 
