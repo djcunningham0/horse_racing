@@ -7,6 +7,10 @@ import polars as pl
 
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 
+# exclude jump races and downhill turf — Churchill Downs has neither, and the
+# dynamics differ enough to add noise
+EXCLUDED_COURSE_DESCS: list[str] = ["Hurdle", "Downhill turf", "Timber"]
+
 DEFAULT_FEATURE_COLS: list[str] = [
     # odds
     "morning_line_odds_float",
@@ -16,7 +20,9 @@ DEFAULT_FEATURE_COLS: list[str] = [
     # race characteristics
     "field_size",
     "distance",
+    "is_dirt",
     "is_turf",
+    "is_all_weather",
     "race_class_rating",  # scale: 20-100+
     "purse",
     # entry characteristics
@@ -93,18 +99,23 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
     pp = pl.read_parquet(processed_dir / "past_performances.parquet")
     workouts = pl.read_parquet(processed_dir / "workouts.parquet")
 
-    race_cols = results.select(
-        "race_id",
-        "race_date",
-        "track",
-        "race_number",
-        "distance",
-        "surface",
-        "num_runners",
-        "horse_name",
-        "official_finish",
-        "dollar_odds",
-        pl.col("class_rating").alias("race_class_rating"),
+    race_cols = (
+        results
+        .filter(~pl.col("course_desc").is_in(EXCLUDED_COURSE_DESCS))
+        .select(
+            "race_id",
+            "race_date",
+            "track",
+            "race_number",
+            "distance",
+            "surface",
+            "course_desc",
+            "num_runners",
+            "horse_name",
+            "official_finish",
+            "dollar_odds",
+            pl.col("class_rating").alias("race_class_rating"),
+        )
     )
 
     entry_cols = entries.select(
@@ -140,12 +151,20 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             # simple encoding and renaming
             pl.col("num_prior_starts").fill_null(0),
             pl.col("num_workouts").fill_null(0),
-            (pl.col("surface") == "T").cast(pl.Int8).alias("is_turf"),
+            (
+                pl.when(pl.col("course_desc") == "All Weather Track").then("All Weather Track")
+                .when(pl.col("surface") == "D").then("Dirt")
+                .when(pl.col("surface") == "T").then("Turf")
+                .otherwise(None)
+            ).alias("_course_type"),
             pl.col("num_runners").alias("field_size"),
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
         )
         .with_columns(
             (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
+            (pl.col("_course_type") == "All Weather Track").cast(pl.Int8).alias("is_all_weather"),
+            (pl.col("_course_type") == "Dirt").cast(pl.Int8).alias("is_dirt"),
+            (pl.col("_course_type") == "Turf").cast(pl.Int8).alias("is_turf"),
         )
         .with_columns(
             # simple derivations
@@ -217,7 +236,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             .over("race_id")
             .alias("dollar_odds_plus_noise_rank"),
         )
-        .drop("last_pp_date", "last_workout_date")
+        .drop("last_pp_date", "last_workout_date", "_course_type")
     )
     # fmt: on
     return df

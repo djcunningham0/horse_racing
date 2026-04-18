@@ -37,7 +37,9 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
             "weight_carried": r.weight_carried,
             "field_size": field_size,
             "distance": request.distance,
+            "is_dirt": int(request.surface == "D"),
             "is_turf": int(request.surface == "T"),
+            "is_all_weather": 0,  # TODO: fine for Churchill Downs (no AWT), but generalize in the future  # fmt: skip
             "class_rating": r.class_rating,
             "speed_fig_L1": _nan_if_none(r.speed_fig_last1),
             "speed_fig_L2": _nan_if_none(r.speed_fig_last2),
