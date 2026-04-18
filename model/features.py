@@ -10,7 +10,9 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 DEFAULT_FEATURE_COLS: list[str] = [
     # odds
     "morning_line_odds_float",
+    "ml_odds_rank",
     "dollar_odds_plus_noise",
+    "dollar_odds_plus_noise_rank",
     # race characteristics
     "field_size",
     "distance",
@@ -203,6 +205,17 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             _dollar_odds_plus_noise(
                 pl.col("dollar_odds"), pl.col("morning_line_odds_float")
             ).alias("dollar_odds_plus_noise"),
+        )
+        .with_columns(
+            # odds ordinal rank within field (1 = favorite; ties share the lower rank)
+            pl.col("morning_line_odds_float")
+            .rank(method="min")
+            .over("race_id")
+            .alias("ml_odds_rank"),
+            pl.col("dollar_odds_plus_noise")
+            .rank(method="min")
+            .over("race_id")
+            .alias("dollar_odds_plus_noise_rank"),
         )
         .drop("last_pp_date", "last_workout_date")
     )
