@@ -152,9 +152,9 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             pl.col("num_prior_starts").fill_null(0),
             pl.col("num_workouts").fill_null(0),
             (
-                pl.when(pl.col("course_desc") == "All Weather Track").then("All Weather Track")
-                .when(pl.col("surface") == "D").then("Dirt")
-                .when(pl.col("surface") == "T").then("Turf")
+                pl.when(pl.col("course_desc") == "All Weather Track").then(pl.lit("All Weather Track"))
+                .when(pl.col("surface") == "D").then(pl.lit("Dirt"))
+                .when(pl.col("surface") == "T").then(pl.lit("Turf"))
                 .otherwise(None)
             ).alias("_course_type"),
             pl.col("num_runners").alias("field_size"),
