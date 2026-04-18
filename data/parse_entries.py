@@ -8,6 +8,12 @@ from pathlib import Path
 from data.schema import make_race_id, parse_odds, safe_float, safe_int, xml_text
 
 
+def _poc_int(text: str | None) -> int | None:
+    """For point-of-call positions, treat zero as null (no call at this point)."""
+    val = safe_int(text)
+    return val if val else None
+
+
 def _parse_date(date_str: str | None) -> date | None:
     """Parse Equibase date '2023-04-29+00:00' → datetime.date."""
     if not date_str:
@@ -60,13 +66,13 @@ def _parse_past_performance(
         for poc in start.findall("PointOfCall"):
             which = xml_text(poc, "PointOfCall")
             if which == "S":
-                row["pp_poc_start_pos"] = safe_int(xml_text(poc, "Position"))
+                row["pp_poc_start_pos"] = _poc_int(xml_text(poc, "Position"))
             elif which == "F":
-                row["pp_poc_final_pos"] = safe_int(xml_text(poc, "Position"))
-                row["pp_poc_final_behind"] = safe_int(xml_text(poc, "LengthsBehind"))
+                row["pp_poc_final_pos"] = _poc_int(xml_text(poc, "Position"))
+                row["pp_poc_final_behind"] = _poc_int(xml_text(poc, "LengthsBehind"))
             elif which in ("1", "2", "3", "4", "5"):
-                row[f"pp_poc_{which}_pos"] = safe_int(xml_text(poc, "Position"))
-                row[f"pp_poc_{which}_behind"] = safe_int(xml_text(poc, "LengthsBehind"))
+                row[f"pp_poc_{which}_pos"] = _poc_int(xml_text(poc, "Position"))
+                row[f"pp_poc_{which}_behind"] = _poc_int(xml_text(poc, "LengthsBehind"))
     else:
         for key in [
             "pp_post_position",
