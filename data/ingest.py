@@ -113,6 +113,15 @@ ENTRIES_SCHEMA = {
     "medication": pl.Utf8,
     "apprentice_weight_allowance": pl.Int64,
     "class_rating": pl.Int64,
+    "career_starts": pl.Int64,
+    "career_wins": pl.Int64,
+    "career_seconds": pl.Int64,
+    "career_thirds": pl.Int64,
+    "career_earnings": pl.Float64,
+    "surface_starts": pl.Int64,
+    "surface_wins": pl.Int64,
+    "surface_seconds": pl.Int64,
+    "surface_thirds": pl.Int64,
 }
 
 PAST_PERFORMANCES_SCHEMA = {

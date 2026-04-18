@@ -112,6 +112,9 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
                 xml_text(starter, "TodaysHorseClassRating")
             )
 
+            # career stats from RaceSummary elements
+            _add_career_stats(entry, starter)
+
             entries.append(entry)
 
             # Past performances — sorted by date descending, indexed 1=most recent
@@ -232,6 +235,55 @@ def _parse_workout(
         "workout_num_in_group": xml_text(wo, "NumberInRankingGroup"),
         "workout_comment": xml_text(wo, "Comment"),
     }
+
+
+def _add_career_stats(entry: dict, starter: ET.Element):
+    """Aggregate RaceSummary elements into career totals and surface-specific stats."""
+    today_surface = entry.get("surface")  # D, T, etc.
+
+    career_starts = 0
+    career_wins = 0
+    career_seconds = 0
+    career_thirds = 0
+    career_earnings = 0.0
+    surface_starts = 0
+    surface_wins = 0
+    surface_seconds = 0
+    surface_thirds = 0
+
+    for rs in starter.findall("RaceSummary"):
+        starts = safe_int(xml_text(rs, "NumberOfStarts")) or 0
+        wins = safe_int(xml_text(rs, "NumberOfWins")) or 0
+        seconds = safe_int(xml_text(rs, "NumberOfSeconds")) or 0
+        thirds = safe_int(xml_text(rs, "NumberOfThirds")) or 0
+        earnings = safe_float(xml_text(rs, "EarningsUSA")) or 0.0
+        surface = xml_text(rs, "Surface/Value")
+
+        career_starts += starts
+        career_wins += wins
+        career_seconds += seconds
+        career_thirds += thirds
+        career_earnings += earnings
+
+        if surface == today_surface:
+            surface_starts += starts
+            surface_wins += wins
+            surface_seconds += seconds
+            surface_thirds += thirds
+
+    # null starts means no RaceSummary data at all; null the whole group
+    has_data = career_starts > 0
+    entry["career_starts"] = career_starts if has_data else None
+    entry["career_wins"] = career_wins if has_data else None
+    entry["career_seconds"] = career_seconds if has_data else None
+    entry["career_thirds"] = career_thirds if has_data else None
+    entry["career_earnings"] = career_earnings if has_data else None
+
+    has_surface = surface_starts > 0
+    entry["surface_starts"] = surface_starts if has_surface else None
+    entry["surface_wins"] = surface_wins if has_surface else None
+    entry["surface_seconds"] = surface_seconds if has_surface else None
+    entry["surface_thirds"] = surface_thirds if has_surface else None
 
 
 def _poc_int(text: str | None) -> int | None:
