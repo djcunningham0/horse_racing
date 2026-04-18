@@ -50,6 +50,14 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "relative_finish_L2",
     "relative_finish_L3",
     "avg_relative_finish",
+    # PP odds
+    "pp_odds_L1",
+    "pp_odds_L2",
+    "pp_odds_L3",
+    "pp_overperformance_L1",
+    "pp_overperformance_L2",
+    "pp_overperformance_L3",
+    "pp_avg_overperformance_L3",
     # PP distance
     "distance_diff_L1",
     "distance_diff_L2",
@@ -305,6 +313,20 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .first()
             .alias("num_starters_L3"),
 
+            # final public odds
+            pl.col("pp_odds")
+            .filter(pl.col("pp_index") == 1)
+            .first()
+            .alias("pp_odds_L1"),
+            pl.col("pp_odds")
+            .filter(pl.col("pp_index") == 2)
+            .first()
+            .alias("pp_odds_L2"),
+            pl.col("pp_odds")
+            .filter(pl.col("pp_index") == 3)
+            .first()
+            .alias("pp_odds_L3"),
+
             # distance
             pl.col("pp_distance_id")
             .filter(pl.col("pp_index") == 1)
@@ -338,7 +360,26 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             (pl.col("speed_fig_L1") - pl.col("avg_speed_fig_L3")).alias("speed_fig_trend"),
         )
         .with_columns(
-            ((pl.col("relative_finish_L1") + pl.col("relative_finish_L2") + pl.col("relative_finish_L3")) / 3).alias("avg_relative_finish")
+            # relative finish (continued)
+            ((pl.col("relative_finish_L1") + pl.col("relative_finish_L2") + pl.col("relative_finish_L3")) / 3).alias("avg_relative_finish"),
+        )
+        .with_columns(
+            # performance vs. market: positive = outperformed implied prob
+            (
+                (1 - pl.col("relative_finish_L1")) - (1 / (pl.col("pp_odds_L1") + 1))
+            ).alias("pp_overperformance_L1"),
+            (
+                (1 - pl.col("relative_finish_L2")) - (1 / (pl.col("pp_odds_L2") + 1))
+            ).alias("pp_overperformance_L2"),
+            (
+                (1 - pl.col("relative_finish_L3")) - (1 / (pl.col("pp_odds_L3") + 1))
+            ).alias("pp_overperformance_L3"),
+        )
+        .with_columns(
+            # performance vs. market (continued)
+            (
+                (pl.col("pp_overperformance_L1") + pl.col("pp_overperformance_L2") + pl.col("pp_overperformance_L3"))  / 3
+            ).alias("pp_avg_overperformance_L3")
         )
     )
     # fmt: on
