@@ -76,6 +76,132 @@ DEFAULT_FEATURE_COLS: list[str] = [
 ]
 
 
+def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFrame:
+    """Assemble one row per horse-in-a-race with features and label."""
+    entries = pl.read_parquet(processed_dir / "entries.parquet")
+    results = pl.read_parquet(processed_dir / "results.parquet")
+    pp = pl.read_parquet(processed_dir / "past_performances.parquet")
+    workouts = pl.read_parquet(processed_dir / "workouts.parquet")
+
+    race_cols = results.select(
+        "race_id",
+        "race_date",
+        "track",
+        "race_number",
+        "distance",
+        "surface",
+        "num_runners",
+        "horse_name",
+        "official_finish",
+        "dollar_odds",
+        pl.col("class_rating").alias("race_class_rating"),
+    )
+
+    entry_cols = entries.select(
+        "race_id",
+        "horse_name",
+        "morning_line_odds_float",
+        "post_position",
+        "weight_carried",
+        pl.col("class_rating").alias("entry_class_rating"),
+        "purse",
+        "career_starts",
+        "career_wins",
+        "career_seconds",
+        "career_thirds",
+        "career_earnings",
+        "surface_starts",
+        "surface_wins",
+        "surface_seconds",
+        "surface_thirds",
+    )
+
+    pp_feats = _pp_features(pp)
+    workout_feats = _workout_features(workouts)
+
+    # fmt: off
+    df = (
+        race_cols
+        .join(entry_cols, on=["race_id", "horse_name"], how="inner")
+        .filter(pl.col("dollar_odds") > 0)
+        .join(pp_feats, on=["race_id", "horse_name"], how="left")
+        .join(workout_feats, on=["race_id", "horse_name"], how="left")
+        .with_columns(
+            # simple encoding and renaming
+            pl.col("num_prior_starts").fill_null(0),
+            pl.col("num_workouts").fill_null(0),
+            (pl.col("surface") == "T").cast(pl.Int8).alias("is_turf"),
+            pl.col("num_runners").alias("field_size"),
+            (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
+        )
+        .with_columns(
+            (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
+        )
+        .with_columns(
+            # simple derivations
+            (pl.col("entry_class_rating") / pl.col("race_class_rating")).alias("entry_to_race_class_ratio"),
+        )
+        .with_columns(
+            ### comparison to previous races/workouts
+            # date
+            (pl.col("race_date") - pl.col("last_pp_date"))
+            .dt.total_days()
+            .alias("days_since_last"),
+            (pl.col("race_date") - pl.col("last_workout_date"))
+            .dt.total_days()
+            .alias("days_since_last_workout"),
+            # distance
+            (pl.col("distance") - pl.col("distance_L1")).alias("distance_diff_L1"),
+            (pl.col("distance") - pl.col("distance_L2")).alias("distance_diff_L2"),
+            (pl.col("distance") - pl.col("distance_L3")).alias("distance_diff_L3"),
+            # race class rating
+            (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
+            (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
+            (pl.col("race_class_rating") - pl.col("max_class_rating_L3")).alias("class_rating_diff_max_L3"),
+        )
+        .with_columns(
+            ### comparison to field (window functions)
+            # entry class rating
+            (
+                pl.col("entry_class_rating") - pl.col("entry_class_rating").mean().over("race_id")
+            ).alias("entry_class_rating_minus_field_avg"),
+            (
+                pl.col("entry_class_rating") / pl.col("entry_class_rating").mean().over("race_id")
+            ).alias("entry_class_rating_to_field_avg_ratio"),
+            # speed
+            (
+                pl.col("speed_fig_L1") - pl.col("speed_fig_L1").mean().over("race_id")
+            ).alias("speed_fig_minus_field_avg_L1"),
+            (
+                pl.col("speed_fig_L1") / pl.col("speed_fig_L1").mean().over("race_id")
+            ).alias("speed_fig_to_field_avg_ratio_L1"),
+        )
+        .with_columns(
+            # career stats
+            (pl.col("career_wins") / pl.col("career_starts")).alias("career_win_rate"),
+            (
+                (pl.col("career_wins") + pl.col("career_seconds") + pl.col("career_thirds"))
+                / pl.col("career_starts")
+            ).alias("career_top3_rate"),
+            (pl.col("career_earnings") / pl.col("career_starts")).alias("career_earnings_per_start"),
+            (pl.col("surface_wins") / pl.col("surface_starts")).alias("surface_win_rate"),
+            (
+                (pl.col("surface_wins") + pl.col("surface_seconds") + pl.col("surface_thirds"))
+                / pl.col("surface_starts")
+            ).alias("surface_top3_rate"),
+        )
+        .with_columns(
+            # add noise to final odds to simulate mid-pool odds
+            _dollar_odds_plus_noise(
+                pl.col("dollar_odds"), pl.col("morning_line_odds_float")
+            ).alias("dollar_odds_plus_noise"),
+        )
+        .drop("last_pp_date", "last_workout_date")
+    )
+    # fmt: on
+    return df
+
+
 def _workout_features(workouts: pl.DataFrame) -> pl.DataFrame:
     """Aggregate workout rows into one row per (race_id, horse_name)."""
     # fmt: off
@@ -271,132 +397,6 @@ def _compute_odds_noise(s: pl.Series, p_exact: float, p_interior: float) -> pl.S
     noisy_odds = np.round(noisy_odds, 1)  # round to nearest 0.1
     noisy_odds = np.maximum(noisy_odds, 0.05)  # floor at lowest observed odds
     return pl.Series(noisy_odds)
-
-
-def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFrame:
-    """Assemble one row per horse-in-a-race with features and label."""
-    entries = pl.read_parquet(processed_dir / "entries.parquet")
-    results = pl.read_parquet(processed_dir / "results.parquet")
-    pp = pl.read_parquet(processed_dir / "past_performances.parquet")
-    workouts = pl.read_parquet(processed_dir / "workouts.parquet")
-
-    race_cols = results.select(
-        "race_id",
-        "race_date",
-        "track",
-        "race_number",
-        "distance",
-        "surface",
-        "num_runners",
-        "horse_name",
-        "official_finish",
-        "dollar_odds",
-        pl.col("class_rating").alias("race_class_rating"),
-    )
-
-    entry_cols = entries.select(
-        "race_id",
-        "horse_name",
-        "morning_line_odds_float",
-        "post_position",
-        "weight_carried",
-        pl.col("class_rating").alias("entry_class_rating"),
-        "purse",
-        "career_starts",
-        "career_wins",
-        "career_seconds",
-        "career_thirds",
-        "career_earnings",
-        "surface_starts",
-        "surface_wins",
-        "surface_seconds",
-        "surface_thirds",
-    )
-
-    pp_feats = _pp_features(pp)
-    workout_feats = _workout_features(workouts)
-
-    # fmt: off
-    df = (
-        race_cols
-        .join(entry_cols, on=["race_id", "horse_name"], how="inner")
-        .filter(pl.col("dollar_odds") > 0)
-        .join(pp_feats, on=["race_id", "horse_name"], how="left")
-        .join(workout_feats, on=["race_id", "horse_name"], how="left")
-        .with_columns(
-            # simple encoding and renaming
-            pl.col("num_prior_starts").fill_null(0),
-            pl.col("num_workouts").fill_null(0),
-            (pl.col("surface") == "T").cast(pl.Int8).alias("is_turf"),
-            pl.col("num_runners").alias("field_size"),
-            (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
-        )
-        .with_columns(
-            (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
-        )
-        .with_columns(
-            # simple derivations
-            (pl.col("entry_class_rating") / pl.col("race_class_rating")).alias("entry_to_race_class_ratio"),
-        )
-        .with_columns(
-            ### comparison to previous races/workouts
-            # date
-            (pl.col("race_date") - pl.col("last_pp_date"))
-            .dt.total_days()
-            .alias("days_since_last"),
-            (pl.col("race_date") - pl.col("last_workout_date"))
-            .dt.total_days()
-            .alias("days_since_last_workout"),
-            # distance
-            (pl.col("distance") - pl.col("distance_L1")).alias("distance_diff_L1"),
-            (pl.col("distance") - pl.col("distance_L2")).alias("distance_diff_L2"),
-            (pl.col("distance") - pl.col("distance_L3")).alias("distance_diff_L3"),
-            # race class rating
-            (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
-            (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
-            (pl.col("race_class_rating") - pl.col("max_class_rating_L3")).alias("class_rating_diff_max_L3"),
-        )
-        .with_columns(
-            ### comparison to field (window functions)
-            # entry class rating
-            (
-                pl.col("entry_class_rating") - pl.col("entry_class_rating").mean().over("race_id")
-            ).alias("entry_class_rating_minus_field_avg"),
-            (
-                pl.col("entry_class_rating") / pl.col("entry_class_rating").mean().over("race_id")
-            ).alias("entry_class_rating_to_field_avg_ratio"),
-            # speed
-            (
-                pl.col("speed_fig_L1") - pl.col("speed_fig_L1").mean().over("race_id")
-            ).alias("speed_fig_minus_field_avg_L1"),
-            (
-                pl.col("speed_fig_L1") / pl.col("speed_fig_L1").mean().over("race_id")
-            ).alias("speed_fig_to_field_avg_ratio_L1"),
-        )
-        .with_columns(
-            # career stats
-            (pl.col("career_wins") / pl.col("career_starts")).alias("career_win_rate"),
-            (
-                (pl.col("career_wins") + pl.col("career_seconds") + pl.col("career_thirds"))
-                / pl.col("career_starts")
-            ).alias("career_top3_rate"),
-            (pl.col("career_earnings") / pl.col("career_starts")).alias("career_earnings_per_start"),
-            (pl.col("surface_wins") / pl.col("surface_starts")).alias("surface_win_rate"),
-            (
-                (pl.col("surface_wins") + pl.col("surface_seconds") + pl.col("surface_thirds"))
-                / pl.col("surface_starts")
-            ).alias("surface_top3_rate"),
-        )
-        .with_columns(
-            # add noise to final odds to simulate mid-pool odds
-            _dollar_odds_plus_noise(
-                pl.col("dollar_odds"), pl.col("morning_line_odds_float")
-            ).alias("dollar_odds_plus_noise"),
-        )
-        .drop("last_pp_date", "last_workout_date")
-    )
-    # fmt: on
-    return df
 
 
 def split_by_race(
