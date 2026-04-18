@@ -65,6 +65,14 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "last_workout_group_size",
     "num_workouts",
     "days_since_last_workout",
+    # career stats
+    "career_starts",
+    "career_win_rate",
+    "career_top3_rate",
+    "career_earnings_per_start",
+    "surface_starts",
+    "surface_win_rate",
+    "surface_top3_rate",
 ]
 
 
@@ -294,6 +302,15 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
         "weight_carried",
         pl.col("class_rating").alias("entry_class_rating"),
         "purse",
+        "career_starts",
+        "career_wins",
+        "career_seconds",
+        "career_thirds",
+        "career_earnings",
+        "surface_starts",
+        "surface_wins",
+        "surface_seconds",
+        "surface_thirds",
     )
 
     pp_feats = _pp_features(pp)
@@ -355,6 +372,20 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             (
                 pl.col("speed_fig_L1") / pl.col("speed_fig_L1").mean().over("race_id")
             ).alias("speed_fig_to_field_avg_ratio_L1"),
+        )
+        .with_columns(
+            # career stats
+            (pl.col("career_wins") / pl.col("career_starts")).alias("career_win_rate"),
+            (
+                (pl.col("career_wins") + pl.col("career_seconds") + pl.col("career_thirds"))
+                / pl.col("career_starts")
+            ).alias("career_top3_rate"),
+            (pl.col("career_earnings") / pl.col("career_starts")).alias("career_earnings_per_start"),
+            (pl.col("surface_wins") / pl.col("surface_starts")).alias("surface_win_rate"),
+            (
+                (pl.col("surface_wins") + pl.col("surface_seconds") + pl.col("surface_thirds"))
+                / pl.col("surface_starts")
+            ).alias("surface_top3_rate"),
         )
         .with_columns(
             # add noise to final odds to simulate mid-pool odds
