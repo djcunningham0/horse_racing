@@ -58,7 +58,35 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "days_since_last",
     "num_prior_starts",
     "is_first_start",
+    # workouts
+    "best_workout_rank_pct",
+    "best_workout_group_size",
+    "last_workout_rank_pct",
+    "last_workout_group_size",
+    "num_workouts",
+    "days_since_last_workout",
 ]
+
+
+def _workout_features(workouts: pl.DataFrame) -> pl.DataFrame:
+    """Aggregate workout rows into one row per (race_id, horse_name)."""
+    # fmt: off
+    return (
+        workouts
+        .with_columns(
+            (pl.col("workout_ranking") / pl.col("workout_num_in_group")).alias("rank_pct"),
+        )
+        .group_by(["race_id", "horse_name"])
+        .agg(
+            pl.col("rank_pct").min().alias("best_workout_rank_pct"),
+            pl.col("workout_num_in_group").sort_by("rank_pct").first().alias("best_workout_group_size"),
+            pl.col("rank_pct").sort_by("workout_date").last().alias("last_workout_rank_pct"),
+            pl.col("workout_num_in_group").sort_by("workout_date").last().alias("last_workout_group_size"),
+            pl.len().alias("num_workouts"),
+            pl.col("workout_date").max().alias("last_workout_date"),
+        )
+    )
+    # fmt: on
 
 
 def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
@@ -69,7 +97,6 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
     # fmt: off
     return (
         pp
-        .with_columns(pl.col("pp_race_date").str.to_date())
         .group_by(["race_id", "horse_name"])
         .agg(
             # speed
@@ -243,6 +270,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
     entries = pl.read_parquet(processed_dir / "entries.parquet")
     results = pl.read_parquet(processed_dir / "results.parquet")
     pp = pl.read_parquet(processed_dir / "past_performances.parquet")
+    workouts = pl.read_parquet(processed_dir / "workouts.parquet")
 
     race_cols = results.select(
         "race_id",
@@ -256,7 +284,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
         "official_finish",
         "dollar_odds",
         pl.col("class_rating").alias("race_class_rating"),
-    ).with_columns(pl.col("race_date").str.to_date())
+    )
 
     entry_cols = entries.select(
         "race_id",
@@ -269,6 +297,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
     )
 
     pp_feats = _pp_features(pp)
+    workout_feats = _workout_features(workouts)
 
     # fmt: off
     df = (
@@ -276,9 +305,11 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
         .join(entry_cols, on=["race_id", "horse_name"], how="inner")
         .filter(pl.col("dollar_odds") > 0)
         .join(pp_feats, on=["race_id", "horse_name"], how="left")
+        .join(workout_feats, on=["race_id", "horse_name"], how="left")
         .with_columns(
             # simple encoding and renaming
             pl.col("num_prior_starts").fill_null(0),
+            pl.col("num_workouts").fill_null(0),
             (pl.col("surface") == "T").cast(pl.Int8).alias("is_turf"),
             pl.col("num_runners").alias("field_size"),
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
@@ -291,11 +322,14 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             (pl.col("entry_class_rating") / pl.col("race_class_rating")).alias("entry_to_race_class_ratio"),
         )
         .with_columns(
-            ### comparison to previous races
+            ### comparison to previous races/workouts
             # date
             (pl.col("race_date") - pl.col("last_pp_date"))
             .dt.total_days()
             .alias("days_since_last"),
+            (pl.col("race_date") - pl.col("last_workout_date"))
+            .dt.total_days()
+            .alias("days_since_last_workout"),
             # distance
             (pl.col("distance") - pl.col("distance_L1")).alias("distance_diff_L1"),
             (pl.col("distance") - pl.col("distance_L2")).alias("distance_diff_L2"),
@@ -328,7 +362,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
                 pl.col("dollar_odds"), pl.col("morning_line_odds_float")
             ).alias("dollar_odds_plus_noise"),
         )
-        .drop("last_pp_date")
+        .drop("last_pp_date", "last_workout_date")
     )
     # fmt: on
     return df
