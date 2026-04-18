@@ -8,118 +8,11 @@ from pathlib import Path
 from data.schema import make_race_id, parse_odds, safe_float, safe_int, xml_text
 
 
-def _poc_int(text: str | None) -> int | None:
-    """For point-of-call positions, treat zero as null (no call at this point)."""
-    val = safe_int(text)
-    return val if val else None
-
-
-def _parse_date(date_str: str | None) -> date | None:
-    """Parse Equibase date '2023-04-29+00:00' → datetime.date."""
-    if not date_str:
-        return None
-    return date.fromisoformat(date_str.split("+")[0].split("T")[0])
-
-
-def _parse_past_performance(
-    pp: ET.Element,
-    race_id: str,
-    horse_name: str,
-    registration_number: str,
-    pp_index: int,
-) -> dict:
-    """Extract fields from a PastPerformance element."""
-    start = pp.find("Start")
-
-    row = {
-        "race_id": race_id,
-        "horse_name": horse_name,
-        "registration_number": registration_number,
-        "pp_index": pp_index,
-        "pp_race_date": _parse_date(xml_text(pp, "RaceDate")),
-        "pp_track": xml_text(pp, "Track/TrackID"),
-        "pp_race_number": safe_int(xml_text(pp, "RaceNumber")),
-        "pp_race_type": xml_text(pp, "RaceType/RaceType"),
-        "pp_distance_id": safe_int(xml_text(pp, "Distance/DistanceId")),
-        "pp_surface": xml_text(pp, "Course/CourseType/Value"),
-        "pp_track_condition": xml_text(pp, "TrackCondition/Value"),
-        "pp_num_starters": safe_int(xml_text(pp, "NumberOfStarters")),
-        "pp_purse": safe_float(xml_text(pp, "PurseUSA")),
-    }
-
-    if start is not None:
-        row["pp_post_position"] = safe_int(xml_text(start, "PostPosition"))
-        row["pp_official_finish"] = safe_int(xml_text(start, "OfficialFinish"))
-        row["pp_speed_figure"] = safe_int(xml_text(start, "SpeedFigure"))
-        row["pp_odds"] = parse_odds(xml_text(start, "Odds"))
-        row["pp_weight_carried"] = safe_int(xml_text(start, "WeightCarried"))
-        row["pp_class_rating"] = safe_int(xml_text(start, "ClassRating"))
-        row["pp_jockey_last_name"] = xml_text(start, "Jockey/LastName")
-        row["pp_trainer_last_name"] = xml_text(start, "Trainer/LastName")
-        row["pp_long_comment"] = xml_text(start, "LongComment")
-        row["pp_short_comment"] = xml_text(start, "ShortComment")
-        row["pp_pace_figure_1"] = safe_int(xml_text(start, "PaceFigure1"))
-        row["pp_pace_figure_2"] = safe_int(xml_text(start, "PaceFigure2"))
-        row["pp_pace_figure_3"] = safe_int(xml_text(start, "PaceFigure3"))
-
-        # point-of-call positions and lengths behind
-        for poc in start.findall("PointOfCall"):
-            which = xml_text(poc, "PointOfCall")
-            if which == "S":
-                row["pp_poc_start_pos"] = _poc_int(xml_text(poc, "Position"))
-            elif which == "F":
-                row["pp_poc_final_pos"] = _poc_int(xml_text(poc, "Position"))
-                row["pp_poc_final_behind"] = _poc_int(xml_text(poc, "LengthsBehind"))
-            elif which in ("1", "2", "3", "4", "5"):
-                row[f"pp_poc_{which}_pos"] = _poc_int(xml_text(poc, "Position"))
-                row[f"pp_poc_{which}_behind"] = _poc_int(xml_text(poc, "LengthsBehind"))
-    else:
-        for key in [
-            "pp_post_position",
-            "pp_official_finish",
-            "pp_speed_figure",
-            "pp_odds",
-            "pp_weight_carried",
-            "pp_class_rating",
-            "pp_jockey_last_name",
-            "pp_trainer_last_name",
-            "pp_long_comment",
-            "pp_short_comment",
-            "pp_pace_figure_1",
-            "pp_pace_figure_2",
-            "pp_pace_figure_3",
-        ]:
-            row[key] = None
-
-    return row
-
-
-def _parse_workout(
-    wo: ET.Element, race_id: str, horse_name: str, registration_number: str
-) -> dict:
-    """Extract fields from a Workout element."""
-    return {
-        "race_id": race_id,
-        "horse_name": horse_name,
-        "registration_number": registration_number,
-        "workout_date": _parse_date(xml_text(wo, "Date")),
-        "workout_track": xml_text(wo, "Track/TrackID"),
-        "workout_distance": xml_text(wo, "Distance/PublishedValue"),
-        "workout_time": xml_text(wo, "Timing"),
-        "workout_type": xml_text(wo, "TypeOfWorkout/Value"),
-        "workout_course": xml_text(wo, "CourseType/CourseType"),
-        "workout_track_condition": xml_text(wo, "TrackCondition/Value"),
-        "workout_ranking": xml_text(wo, "Ranking"),
-        "workout_num_in_group": xml_text(wo, "NumberInRankingGroup"),
-        "workout_comment": xml_text(wo, "Comment"),
-    }
-
-
 def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
-    """Parse a PPS ZIP file into (entries, past_performances, workouts).
+    """
+    Parse a PPs ZIP file into (entries, past_performances, workouts).
 
-    Each ZIP contains a single XML file with an EntryRaceCard for one
-    track on one date.
+    Each ZIP contains a single XML file with an EntryRaceCard for one track on one date.
     """
     with zipfile.ZipFile(zip_path) as zf:
         xml_name = zf.namelist()[0]
@@ -245,3 +138,110 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
                 )
 
     return entries, past_performances, workouts
+
+
+def _parse_past_performance(
+    pp: ET.Element,
+    race_id: str,
+    horse_name: str,
+    registration_number: str,
+    pp_index: int,
+) -> dict:
+    """Extract fields from a PastPerformance element."""
+    start = pp.find("Start")
+
+    row = {
+        "race_id": race_id,
+        "horse_name": horse_name,
+        "registration_number": registration_number,
+        "pp_index": pp_index,
+        "pp_race_date": _parse_date(xml_text(pp, "RaceDate")),
+        "pp_track": xml_text(pp, "Track/TrackID"),
+        "pp_race_number": safe_int(xml_text(pp, "RaceNumber")),
+        "pp_race_type": xml_text(pp, "RaceType/RaceType"),
+        "pp_distance_id": safe_int(xml_text(pp, "Distance/DistanceId")),
+        "pp_surface": xml_text(pp, "Course/CourseType/Value"),
+        "pp_track_condition": xml_text(pp, "TrackCondition/Value"),
+        "pp_num_starters": safe_int(xml_text(pp, "NumberOfStarters")),
+        "pp_purse": safe_float(xml_text(pp, "PurseUSA")),
+    }
+
+    if start is not None:
+        row["pp_post_position"] = safe_int(xml_text(start, "PostPosition"))
+        row["pp_official_finish"] = safe_int(xml_text(start, "OfficialFinish"))
+        row["pp_speed_figure"] = safe_int(xml_text(start, "SpeedFigure"))
+        row["pp_odds"] = parse_odds(xml_text(start, "Odds"))
+        row["pp_weight_carried"] = safe_int(xml_text(start, "WeightCarried"))
+        row["pp_class_rating"] = safe_int(xml_text(start, "ClassRating"))
+        row["pp_jockey_last_name"] = xml_text(start, "Jockey/LastName")
+        row["pp_trainer_last_name"] = xml_text(start, "Trainer/LastName")
+        row["pp_long_comment"] = xml_text(start, "LongComment")
+        row["pp_short_comment"] = xml_text(start, "ShortComment")
+        row["pp_pace_figure_1"] = safe_int(xml_text(start, "PaceFigure1"))
+        row["pp_pace_figure_2"] = safe_int(xml_text(start, "PaceFigure2"))
+        row["pp_pace_figure_3"] = safe_int(xml_text(start, "PaceFigure3"))
+
+        # point-of-call positions and lengths behind
+        for poc in start.findall("PointOfCall"):
+            which = xml_text(poc, "PointOfCall")
+            if which == "S":
+                row["pp_poc_start_pos"] = _poc_int(xml_text(poc, "Position"))
+            elif which == "F":
+                row["pp_poc_final_pos"] = _poc_int(xml_text(poc, "Position"))
+                row["pp_poc_final_behind"] = _poc_int(xml_text(poc, "LengthsBehind"))
+            elif which in ("1", "2", "3", "4", "5"):
+                row[f"pp_poc_{which}_pos"] = _poc_int(xml_text(poc, "Position"))
+                row[f"pp_poc_{which}_behind"] = _poc_int(xml_text(poc, "LengthsBehind"))
+    else:
+        for key in [
+            "pp_post_position",
+            "pp_official_finish",
+            "pp_speed_figure",
+            "pp_odds",
+            "pp_weight_carried",
+            "pp_class_rating",
+            "pp_jockey_last_name",
+            "pp_trainer_last_name",
+            "pp_long_comment",
+            "pp_short_comment",
+            "pp_pace_figure_1",
+            "pp_pace_figure_2",
+            "pp_pace_figure_3",
+        ]:
+            row[key] = None
+
+    return row
+
+
+def _parse_workout(
+    wo: ET.Element, race_id: str, horse_name: str, registration_number: str
+) -> dict:
+    """Extract fields from a Workout element."""
+    return {
+        "race_id": race_id,
+        "horse_name": horse_name,
+        "registration_number": registration_number,
+        "workout_date": _parse_date(xml_text(wo, "Date")),
+        "workout_track": xml_text(wo, "Track/TrackID"),
+        "workout_distance": xml_text(wo, "Distance/PublishedValue"),
+        "workout_time": xml_text(wo, "Timing"),
+        "workout_type": xml_text(wo, "TypeOfWorkout/Value"),
+        "workout_course": xml_text(wo, "CourseType/CourseType"),
+        "workout_track_condition": xml_text(wo, "TrackCondition/Value"),
+        "workout_ranking": xml_text(wo, "Ranking"),
+        "workout_num_in_group": xml_text(wo, "NumberInRankingGroup"),
+        "workout_comment": xml_text(wo, "Comment"),
+    }
+
+
+def _poc_int(text: str | None) -> int | None:
+    """For point-of-call positions, treat zero as null (no call at this point)."""
+    val = safe_int(text)
+    return val if val else None
+
+
+def _parse_date(date_str: str | None) -> date | None:
+    """Parse Equibase date '2023-04-29+00:00' → datetime.date."""
+    if not date_str:
+        return None
+    return date.fromisoformat(date_str.split("+")[0].split("T")[0])
