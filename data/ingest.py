@@ -32,6 +32,8 @@ RESULTS_SCHEMA = {
     "race_type": pl.Utf8,
     "course_id": pl.Utf8,
     "course_desc": pl.Utf8,
+    "about_dist_flag": pl.Utf8,
+    "run_up_distance": pl.Int64,
     "purse": pl.Float64,
     "distance": pl.Int64,
     "distance_unit": pl.Utf8,

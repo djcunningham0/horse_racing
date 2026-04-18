@@ -49,6 +49,8 @@ def parse_result_chart(xml_path: Path) -> list[dict]:
             "purse": safe_float(xml_text(race, "PURSE")),
             "distance": safe_int(xml_text(race, "DISTANCE")),
             "distance_unit": xml_text(race, "DIST_UNIT"),
+            "about_dist_flag": xml_text(race, "ABOUT_DIST_FLAG"),
+            "run_up_distance": safe_int(xml_text(race, "RUNUPDIST")),
             "surface": xml_text(race, "SURFACE"),
             "track_condition": xml_text(race, "TRK_COND"),
             "weather": xml_text(race, "WEATHER"),
