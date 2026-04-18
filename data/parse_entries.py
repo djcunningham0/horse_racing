@@ -165,13 +165,15 @@ def _parse_past_performance(
         "pp_distance_id": safe_int(xml_text(pp, "Distance/DistanceId")),
         "pp_surface": xml_text(pp, "Course/CourseType/Value"),
         "pp_track_condition": xml_text(pp, "TrackCondition/Value"),
-        "pp_num_starters": safe_int(xml_text(pp, "NumberOfStarters")),
+        "pp_num_starters": safe_int(xml_text(pp, "NumberOfStarters")) or None,
         "pp_purse": safe_float(xml_text(pp, "PurseUSA")),
     }
 
     if start is not None:
         row["pp_post_position"] = safe_int(xml_text(start, "PostPosition"))
-        row["pp_official_finish"] = safe_int(xml_text(start, "OfficialFinish"))
+        finish = safe_int(xml_text(start, "OfficialFinish"))
+        dnf = (finish or 0) >= 90  # values >= 90 are DNF codes (pulled up, eased, did not finish)
+        row["pp_official_finish"] = finish if finish is not None and not dnf else None
         row["pp_speed_figure"] = safe_int(xml_text(start, "SpeedFigure"))
         row["pp_odds"] = parse_odds(xml_text(start, "Odds"))
         row["pp_weight_carried"] = safe_int(xml_text(start, "WeightCarried"))
