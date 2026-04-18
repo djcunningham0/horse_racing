@@ -44,6 +44,8 @@ def parse_result_chart(xml_path: Path) -> list[dict]:
             "race_number": race_number,
             "breed": xml_text(race, "BREED"),
             "race_type": xml_text(race, "TYPE"),
+            "course_id": xml_text(race, "COURSE_ID"),
+            "course_desc": xml_text(race, "COURSE_DESC"),
             "purse": safe_float(xml_text(race, "PURSE")),
             "distance": safe_int(xml_text(race, "DISTANCE")),
             "distance_unit": xml_text(race, "DIST_UNIT"),
