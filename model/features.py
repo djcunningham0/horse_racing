@@ -116,7 +116,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             "dollar_odds",
             pl.col("class_rating").alias("race_class_rating"),
         )
-    )
+    )  # fmt: skip
 
     entry_cols = entries.select(
         "race_id",
