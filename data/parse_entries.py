@@ -2,16 +2,17 @@
 
 import xml.etree.ElementTree as ET
 import zipfile
+from datetime import date
 from pathlib import Path
 
 from data.schema import make_race_id, parse_odds, safe_float, safe_int, xml_text
 
 
-def _parse_date(date_str: str | None) -> str | None:
-    """Normalize Equibase date format '2023-04-29+00:00' → '2023-04-29'."""
+def _parse_date(date_str: str | None) -> date | None:
+    """Parse Equibase date '2023-04-29+00:00' → datetime.date."""
     if not date_str:
         return None
-    return date_str.split("+")[0].split("T")[0]
+    return date.fromisoformat(date_str.split("+")[0].split("T")[0])
 
 
 def _parse_past_performance(
@@ -133,7 +134,8 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
         if race_number is None:
             continue
 
-        race_id = make_race_id(race_date or "", track or "", race_number)
+        race_date_str = race_date.isoformat() if race_date else ""
+        race_id = make_race_id(race_date_str, track or "", race_number)
 
         race_fields = {
             "race_id": race_id,
@@ -218,8 +220,8 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
             pp_dates = []
             for pp in pps:
                 pp_date = _parse_date(xml_text(pp, "RaceDate"))
-                pp_dates.append((pp_date or "", pp))
-            pp_dates.sort(key=lambda x: x[0], reverse=True)
+                pp_dates.append((pp_date, pp))
+            pp_dates.sort(key=lambda x: x[0] or date.min, reverse=True)
 
             for idx, (_, pp) in enumerate(pp_dates, start=1):
                 past_performances.append(

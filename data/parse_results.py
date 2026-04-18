@@ -1,6 +1,7 @@
 """Parse Equibase result chart XML files into flat dicts."""
 
 import xml.etree.ElementTree as ET
+from datetime import date
 from pathlib import Path
 
 from data.schema import make_race_id, safe_float, safe_int, xml_text
@@ -22,7 +23,8 @@ def parse_result_chart(xml_path: Path) -> list[dict]:
     tree = ET.parse(xml_path)
     chart = tree.getroot()
 
-    race_date = chart.get("RACE_DATE", "")
+    race_date_str = chart.get("RACE_DATE", "")
+    race_date = date.fromisoformat(race_date_str) if race_date_str else None
     track_el = chart.find("TRACK")
     track = xml_text(track_el, "CODE") if track_el is not None else None
 
@@ -32,7 +34,8 @@ def parse_result_chart(xml_path: Path) -> list[dict]:
         if race_number is None:
             continue
 
-        race_id = make_race_id(race_date, track or "", race_number)
+        race_date_str = race_date.isoformat() if race_date else ""
+        race_id = make_race_id(race_date_str, track or "", race_number)
 
         entries = race.findall("ENTRY")
         num_runners = len(entries)

@@ -25,7 +25,7 @@ DEFAULT_OUTPUT_DIR = Path("data/processed")
 
 RESULTS_SCHEMA = {
     "race_id": pl.Utf8,
-    "race_date": pl.Utf8,
+    "race_date": pl.Date,
     "track": pl.Utf8,
     "race_number": pl.Int64,
     "breed": pl.Utf8,
@@ -78,7 +78,7 @@ RESULTS_SCHEMA = {
 
 ENTRIES_SCHEMA = {
     "race_id": pl.Utf8,
-    "race_date": pl.Utf8,
+    "race_date": pl.Date,
     "track": pl.Utf8,
     "race_number": pl.Int64,
     "breed": pl.Utf8,
@@ -120,7 +120,7 @@ PAST_PERFORMANCES_SCHEMA = {
     "horse_name": pl.Utf8,
     "registration_number": pl.Utf8,
     "pp_index": pl.Int64,
-    "pp_race_date": pl.Utf8,
+    "pp_race_date": pl.Date,
     "pp_track": pl.Utf8,
     "pp_race_number": pl.Int64,
     "pp_race_type": pl.Utf8,
