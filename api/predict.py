@@ -12,10 +12,13 @@ from api.schemas import RaceRequest, RunnerPrediction
 
 
 def load_model(
-    model_dir: Path = DEFAULT_MODEL_DIR,
-    model_filename: str = MODEL_FILENAME,
+    model_dir: Path | str = DEFAULT_MODEL_DIR,
+    model_filename: Path | str = MODEL_FILENAME,
 ) -> dict:
     """Load the serialized model bundle (model + feature list)."""
+    if isinstance(model_dir, str):
+        model_dir = Path(model_dir)
+
     return joblib.load(model_dir / model_filename)
 
 

@@ -23,7 +23,7 @@ DEFAULT_HYPERPARAMS = {
     "objective": "rank:ndcg",
     "tree_method": "hist",
     "n_estimators": 800,
-    "learning_rate": 0.05,
+    "learning_rate": 0.01,
     "max_depth": 4,
     "subsample": 0.8,
     "colsample_bytree": 0.8,

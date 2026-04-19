@@ -4,8 +4,14 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
+from numpy.typing import NDArray
 
 DEFAULT_PROCESSED_DIR = Path("data/processed")
+
+# settings for random split
+DEFAULT_VAL_FRAC = 0.15
+DEFAULT_TEST_FRAC = 0.15
+DEFAULT_RANDOM_SEED = 0
 
 # exclude jump races and downhill turf — Churchill Downs has neither, and the
 # dynamics differ enough to add noise
@@ -94,8 +100,13 @@ DEFAULT_FEATURE_COLS: list[str] = [
 ]
 
 
-def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFrame:
+def build_training_df(
+    processed_dir: Path | str = DEFAULT_PROCESSED_DIR,
+) -> pl.DataFrame:
     """Assemble one row per horse-in-a-race with features and label."""
+    if isinstance(processed_dir, str):
+        processed_dir = Path(processed_dir)
+
     entries = pl.read_parquet(processed_dir / "entries.parquet")
     results = pl.read_parquet(processed_dir / "results.parquet")
     pp = pl.read_parquet(processed_dir / "past_performances.parquet")
@@ -500,16 +511,41 @@ def _compute_odds_noise(s: pl.Series, p_exact: float, p_interior: float) -> pl.S
 
 def split_by_race(
     df: pl.DataFrame,
-    val_frac: float = 0.15,
-    test_frac: float = 0.15,
-    seed: int = 0,
+    val_frac: float = DEFAULT_VAL_FRAC,
+    test_frac: float = DEFAULT_TEST_FRAC,
+    seed: int = DEFAULT_RANDOM_SEED,
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
-    """Random split by race_id. All rows of a given race stay together.
+    """
+    Random split by race_id. All rows of a given race stay together.
 
-    See plan: random (not chronological) because only 2023 data is available,
-    so a time split would confound seasonal effects with model quality. Safe
-    for the current baseline feature set — none of the features are keyed on
-    horse/jockey/trainer identity, so no cross-split leakage.
+    Random (not chronological) because only data for a single year (2023) is available,
+    so a time split would confound seasonal effects with model quality. Safe for the
+    current baseline feature set — none of the features are keyed on horse, jockey, or
+    trainer identity, so no cross-split leakage.
+    """
+    train_ids, val_ids, test_ids = get_race_id_splits(
+        df=df,
+        val_frac=val_frac,
+        test_frac=test_frac,
+        seed=seed,
+    )
+    return (
+        df.filter(pl.col("race_id").is_in(train_ids)),
+        df.filter(pl.col("race_id").is_in(val_ids)),
+        df.filter(pl.col("race_id").is_in(test_ids)),
+    )
+
+
+def get_race_id_splits(
+    df: pl.DataFrame,
+    val_frac: float = DEFAULT_VAL_FRAC,
+    test_frac: float = DEFAULT_TEST_FRAC,
+    seed: int = DEFAULT_RANDOM_SEED,
+    id_col: str = "race_id",
+) -> tuple[NDArray[np.str_], NDArray[np.str_], NDArray[np.str_]]:
+    """
+    Return the (train_ids, val_ids, test_ids) to split races in to train, validation,
+    and test set.
     """
     race_ids = np.sort(df["race_id"].unique().to_numpy())
     rng = np.random.default_rng(seed)
@@ -520,8 +556,4 @@ def split_by_race(
     test_ids = race_ids[:n_test]
     val_ids = race_ids[n_test : n_test + n_val]
     train_ids = race_ids[n_test + n_val :]
-    return (
-        df.filter(pl.col("race_id").is_in(train_ids)),
-        df.filter(pl.col("race_id").is_in(val_ids)),
-        df.filter(pl.col("race_id").is_in(test_ids)),
-    )
+    return train_ids, val_ids, test_ids
