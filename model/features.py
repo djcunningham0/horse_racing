@@ -70,6 +70,8 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "distance_diff_L1",
     "distance_diff_L2",
     "distance_diff_L3",
+    # PP surface
+    "surface_switch_L1",
     # PP prior starts
     "days_since_last",
     "num_prior_starts",
@@ -151,12 +153,6 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             # simple encoding and renaming
             pl.col("num_prior_starts").fill_null(0),
             pl.col("num_workouts").fill_null(0),
-            (
-                pl.when(pl.col("course_desc") == "All Weather Track").then(pl.lit("All Weather Track"))
-                .when(pl.col("surface") == "D").then(pl.lit("Dirt"))
-                .when(pl.col("surface") == "T").then(pl.lit("Turf"))
-                .otherwise(None)
-            ).alias("_course_type"),
             pl.col("num_runners").alias("field_size"),
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
         )
@@ -165,6 +161,26 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             (pl.col("_course_type") == "All Weather Track").cast(pl.Int8).alias("is_all_weather"),
             (pl.col("_course_type") == "Dirt").cast(pl.Int8).alias("is_dirt"),
             (pl.col("_course_type") == "Turf").cast(pl.Int8).alias("is_turf"),
+            (pl.col("_course_type") != pl.col("_pp_course_type_L1")).cast(pl.Int8).alias("surface_switch_L1"),
+        )
+        .with_columns(
+            # derive course type from course description and/or surface
+            (
+                # results: use course_desc and surface
+                pl.when(pl.col("course_desc") == "All Weather Track").then(pl.lit("All Weather Track"))
+                .when(pl.col("surface") == "D").then(pl.lit("Dirt"))
+                .when(pl.col("surface") == "T").then(pl.lit("Turf"))
+                .otherwise(None)
+            ).alias("_course_type"),
+            (
+                # PPs: use pp_surface
+                # - T/I/O = turf, D = dirt, E = all-weather
+                # - rare codes (M/C/B/S/V/J/U/N) fall through to null
+                pl.when(pl.col("pp_surface_L1").is_in(["T", "I", "O"])).then(pl.lit("Turf"))
+                .when(pl.col("pp_surface_L1") == "D").then(pl.lit("Dirt"))
+                .when(pl.col("pp_surface_L1") == "E").then(pl.lit("All Weather Track"))
+                .otherwise(None)
+            ).alias("_pp_course_type_L1"),
         )
         .with_columns(
             # simple derivations
@@ -236,7 +252,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             .over("race_id")
             .alias("dollar_odds_plus_noise_rank"),
         )
-        .drop("last_pp_date", "last_workout_date", "_course_type")
+        .drop("last_pp_date", "last_workout_date", "_course_type", "_pp_course_type_L1")
     )
     # fmt: on
     return df
@@ -372,6 +388,12 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .filter(pl.col("pp_index") == 3)
             .first()
             .alias("distance_L3"),
+
+            # surface of last race
+            pl.col("pp_surface")
+            .filter(pl.col("pp_index") == 1)
+            .first()
+            .alias("pp_surface_L1"),
 
             # date of last race
             pl.col("pp_race_date")
