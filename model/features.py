@@ -157,11 +157,8 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
         )
         .with_columns(
+            # simple encoding (continued)
             (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
-            (pl.col("_course_type") == "All Weather Track").cast(pl.Int8).alias("is_all_weather"),
-            (pl.col("_course_type") == "Dirt").cast(pl.Int8).alias("is_dirt"),
-            (pl.col("_course_type") == "Turf").cast(pl.Int8).alias("is_turf"),
-            (pl.col("_course_type") != pl.col("_pp_course_type_L1")).cast(pl.Int8).alias("surface_switch_L1"),
         )
         .with_columns(
             # derive course type from course description and/or surface
@@ -181,6 +178,13 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
                 .when(pl.col("pp_surface_L1") == "E").then(pl.lit("All Weather Track"))
                 .otherwise(None)
             ).alias("_pp_course_type_L1"),
+        )
+        .with_columns(
+            # derive course type (continued)
+            (pl.col("_course_type") == "All Weather Track").cast(pl.Int8).alias("is_all_weather"),
+            (pl.col("_course_type") == "Dirt").cast(pl.Int8).alias("is_dirt"),
+            (pl.col("_course_type") == "Turf").cast(pl.Int8).alias("is_turf"),
+            (pl.col("_course_type") != pl.col("_pp_course_type_L1")).cast(pl.Int8).alias("surface_switch_L1"),
         )
         .with_columns(
             # simple derivations
