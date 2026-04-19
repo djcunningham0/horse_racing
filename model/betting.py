@@ -18,15 +18,21 @@ BET_RULES = (
 )
 
 
-def add_ev_columns(df: pl.DataFrame) -> pl.DataFrame:
+def add_ev_columns(
+    df: pl.DataFrame,
+    dollar_odds_col: str = "dollar_odds",
+    prob_col: str = "model_prob",
+    out_decimal_odds_col: str = "decimal_odds",
+    out_ev_col: str = "ev_per_dollar",
+) -> pl.DataFrame:
     """Add ``decimal_odds`` and ``ev_per_dollar`` columns.
 
     ``ev_per_dollar = model_prob * decimal_odds - 1``.  A positive value means
     the model thinks the horse is underpriced by the market.
     """
     return df.with_columns(
-        (pl.col("dollar_odds") + 1).alias("decimal_odds"),
-        (pl.col("model_prob") * (pl.col("dollar_odds") + 1) - 1).alias("ev_per_dollar"),
+        (pl.col(dollar_odds_col) + 1).alias(out_decimal_odds_col),
+        (pl.col(prob_col) * (pl.col(dollar_odds_col) + 1) - 1).alias(out_ev_col),
     )
 
 
