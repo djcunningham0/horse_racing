@@ -20,22 +20,12 @@ logger = logging.getLogger(__name__)
 EPS = 1e-12
 
 
-def _softmax(x: np.ndarray) -> np.ndarray:
-    x = x - x.max()
-    e = np.exp(x)
-    return e / e.sum()
-
-
 def _per_race_softmax(df: pl.DataFrame, score_col: str, out_col: str) -> pl.DataFrame:
     """Add `out_col`: softmax of `score_col` within each race."""
-    out_frames = []
-    for (_race_id,), group in df.group_by("race_id"):
-        s = group[score_col].to_numpy().astype(float)
-        if np.isnan(s).any():
-            mean = np.nanmean(s) if not np.all(np.isnan(s)) else 0.0
-            s = np.where(np.isnan(s), mean, s)
-        out_frames.append(group.with_columns(pl.Series(out_col, _softmax(s))))
-    return pl.concat(out_frames)
+    shifted = pl.col(score_col) - pl.col(score_col).max().over("race_id")
+    return df.with_columns(shifted.exp().alias(out_col)).with_columns(
+        pl.col(out_col) / pl.col(out_col).sum().over("race_id")
+    )
 
 
 def _market_probs(df: pl.DataFrame) -> pl.DataFrame:
