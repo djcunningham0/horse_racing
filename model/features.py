@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
-DEFAULT_PROCESSED_DIR = Path("data/processed")
+from model.paths import DEFAULT_PROCESSED_DIR
 
 # settings for random split
 DEFAULT_VAL_FRAC = 0.15

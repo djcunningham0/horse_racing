@@ -5,19 +5,17 @@ Usage:
 """
 
 import logging
-from pathlib import Path
 
 import joblib
 import numpy as np
 import polars as pl
 from xgboost import XGBRanker
 
+from model.calibration import fit_temperature
 from model.features import DEFAULT_FEATURE_COLS, build_training_df, split_by_race
+from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_MODEL_DIR = Path("model/artifacts")
-MODEL_FILENAME = "xgb_ranker_v1.joblib"
 
 DEFAULT_HYPERPARAMS = {
     "objective": "rank:ndcg",
@@ -81,9 +79,15 @@ def main():
     train_df, val_df, _ = split_by_race(df)
     model = train(train_df, val_df)
 
+    temperature = fit_temperature(model, val_df, DEFAULT_FEATURE_COLS)
+    logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
+
     DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     out_path = DEFAULT_MODEL_DIR / MODEL_FILENAME
-    joblib.dump({"model": model, "features": DEFAULT_FEATURE_COLS}, out_path)
+    joblib.dump(
+        {"model": model, "features": DEFAULT_FEATURE_COLS, "temperature": temperature},
+        out_path,
+    )
     logger.info(f"saved model to {out_path}")
 
 

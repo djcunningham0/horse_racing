@@ -5,8 +5,9 @@ from pathlib import Path
 import joblib
 import numpy as np
 
+from model.calibration import apply_temperature
 from model.features import DEFAULT_FEATURE_COLS
-from model.train import DEFAULT_MODEL_DIR, MODEL_FILENAME
+from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 from api.schemas import RaceRequest, RunnerPrediction
 
@@ -25,6 +26,7 @@ def load_model(
 def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPrediction]:
     """Score all runners in a race and return predictions sorted by EV."""
     model = model_bundle["model"]
+    temperature = model_bundle.get("temperature", 1.0)
     field_size = len(request.runners)
 
     # build feature matrix
@@ -58,7 +60,7 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
 
     X = np.array(rows, dtype=np.float32)
     scores = model.predict(X)
-    probs = _softmax(scores)
+    probs = apply_temperature(scores, temperature)
 
     # calculate market probabilities from tote odds, then normalize
     raw_market = np.array([1.0 / (r.tote_odds + 1.0) for r in request.runners])
@@ -86,12 +88,6 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
 
     predictions.sort(key=lambda p: p.ev_per_dollar, reverse=True)
     return predictions
-
-
-def _softmax(x: np.ndarray) -> np.ndarray:
-    x = x - x.max()
-    e = np.exp(x)
-    return e / e.sum()
 
 
 def _nan_if_none(val: float | None) -> float:

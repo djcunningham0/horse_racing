@@ -13,16 +13,22 @@ import polars as pl
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
 from model.features import build_training_df, split_by_race
-from model.train import DEFAULT_MODEL_DIR, MODEL_FILENAME
+from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 logger = logging.getLogger(__name__)
 
 EPS = 1e-12
 
 
-def _per_race_softmax(df: pl.DataFrame, score_col: str, out_col: str) -> pl.DataFrame:
-    """Add `out_col`: softmax of `score_col` within each race."""
-    shifted = pl.col(score_col) - pl.col(score_col).max().over("race_id")
+def _per_race_softmax(
+    df: pl.DataFrame,
+    score_col: str,
+    out_col: str,
+    temperature: float = 1.0,
+) -> pl.DataFrame:
+    """Add `out_col`: softmax of `score_col / temperature` within each race."""
+    scaled = pl.col(score_col) / temperature
+    shifted = scaled - scaled.max().over("race_id")
     return df.with_columns(shifted.exp().alias(out_col)).with_columns(
         pl.col(out_col) / pl.col(out_col).sum().over("race_id")
     )
@@ -80,11 +86,21 @@ def _roi_label(cfg: dict) -> str:
     return label
 
 
-def _metrics_for_split(split_df: pl.DataFrame, model, features: list[str]) -> dict:
+def _metrics_for_split(
+    split_df: pl.DataFrame,
+    model,
+    features: list[str],
+    temperature: float = 1.0,
+) -> dict:
     X = split_df.select(features).to_numpy()
     scores = model.predict(X)
     split_df = split_df.with_columns(pl.Series("model_score", scores))
-    split_df = _per_race_softmax(split_df, "model_score", "model_prob")
+    split_df = _per_race_softmax(
+        split_df,
+        score_col="model_score",
+        out_col="model_prob",
+        temperature=temperature,
+    )
     split_df = _market_probs(split_df)
 
     # drop races with no winner
@@ -169,12 +185,13 @@ def evaluate_splits(
     train_df: pl.DataFrame,
     val_df: pl.DataFrame,
     test_df: pl.DataFrame,
+    temperature: float = 1.0,
 ) -> dict[str, dict]:
     """Compute metrics on all three splits. Returns dict keyed by split name."""
     return {
-        "train": _metrics_for_split(train_df, model, features),
-        "val": _metrics_for_split(val_df, model, features),
-        "test": _metrics_for_split(test_df, model, features),
+        "train": _metrics_for_split(train_df, model, features, temperature),
+        "val": _metrics_for_split(val_df, model, features, temperature),
+        "test": _metrics_for_split(test_df, model, features, temperature),
     }
 
 
@@ -183,11 +200,20 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
     bundle = joblib.load(model_dir / MODEL_FILENAME)
     model = bundle["model"]
     features = bundle["features"]
+    temperature = bundle.get("temperature", 1.0)
+    logger.info(f"using temperature T={temperature:.4f}")
 
     df = build_training_df()
     train_df, val_df, test_df = split_by_race(df)
 
-    metrics = evaluate_splits(model, features, train_df, val_df, test_df)
+    metrics = evaluate_splits(
+        model=model,
+        features=features,
+        train_df=train_df,
+        val_df=val_df,
+        test_df=test_df,
+        temperature=temperature,
+    )
     print_metrics_table(metrics)
     return metrics
 

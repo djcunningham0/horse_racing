@@ -18,9 +18,11 @@ import numpy as np
 import shap
 from xgboost import plot_importance
 
+from model.calibration import fit_temperature
 from model.evaluate import print_metrics_table, evaluate_splits
 from model.features import DEFAULT_FEATURE_COLS, build_training_df, split_by_race
-from model.train import DEFAULT_HYPERPARAMS, DEFAULT_MODEL_DIR, prepare_df, train
+from model.paths import DEFAULT_MODEL_DIR
+from model.train import DEFAULT_HYPERPARAMS, prepare_df, train
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,11 @@ def run_experiment(
         # train
         model = train(train_df, val_df, features=features, hyperparameters=params)
 
+        # fit softmax temperature on val
+        temperature = fit_temperature(model, val_df, features)
+        logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
+        mlflow.log_metric("temperature", temperature)
+
         # evaluate
         metrics = evaluate_splits(
             model,
@@ -82,6 +89,7 @@ def run_experiment(
             train_df=train_df,
             val_df=val_df,
             test_df=test_df,
+            temperature=temperature,
         )
         print_metrics_table(metrics)
         _log_metrics_to_mlflow(metrics)
@@ -92,7 +100,10 @@ def run_experiment(
         # save artifact
         DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
         artifact_path = DEFAULT_MODEL_DIR / f"{run.info.run_id}.joblib"
-        joblib.dump({"model": model, "features": features}, artifact_path)
+        joblib.dump(
+            {"model": model, "features": features, "temperature": temperature},
+            artifact_path,
+        )
         mlflow.log_artifact(str(artifact_path))
 
         logger.info(f"experiment '{label}' logged as run {run.info.run_id}")

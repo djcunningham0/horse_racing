@@ -45,3 +45,20 @@ def test_per_race_softmax_preserves_row_order():
     })
     out = _per_race_softmax(df, "score", "prob")
     assert out["race_id"].to_list() == [2, 1, 2, 1]
+
+
+def test_per_race_softmax_temperature_sharpens():
+    df = pl.DataFrame({"race_id": [1, 1, 1], "score": [1.0, 2.0, 3.0]})
+    cold = _per_race_softmax(df, "score", "prob", temperature=0.5)["prob"].to_numpy()
+    hot = _per_race_softmax(df, "score", "prob", temperature=2.0)["prob"].to_numpy()
+    assert cold.max() > hot.max()  # lower T concentrates mass on top score
+    expected_cold = np.exp(np.array([1, 2, 3]) / 0.5)
+    expected_cold = expected_cold / expected_cold.sum()
+    np.testing.assert_allclose(cold, expected_cold)
+
+
+def test_per_race_softmax_temperature_one_matches_default():
+    df = pl.DataFrame({"race_id": [1, 1, 1], "score": [1.0, 2.0, 3.0]})
+    default = _per_race_softmax(df, "score", "prob")["prob"].to_numpy()
+    explicit = _per_race_softmax(df, "score", "prob", temperature=1.0)["prob"].to_numpy()
+    np.testing.assert_allclose(default, explicit)
