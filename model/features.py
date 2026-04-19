@@ -252,6 +252,7 @@ def build_training_df(
         )
         .with_columns(
             # add noise to final odds to simulate mid-pool odds
+            # TODO: don't add noise in the final inference pipeline
             _dollar_odds_plus_noise(
                 pl.col("dollar_odds"), pl.col("morning_line_odds_float")
             ).alias("dollar_odds_plus_noise"),
