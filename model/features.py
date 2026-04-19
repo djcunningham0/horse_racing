@@ -19,7 +19,7 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "dollar_odds_plus_noise_rank",
     # race characteristics
     "field_size",
-    "distance",
+    "distance_yards",
     "is_dirt",
     "is_turf",
     "is_all_weather",
@@ -109,7 +109,7 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             "race_date",
             "track",
             "race_number",
-            "distance",
+            "distance_yards",
             "surface",
             "course_desc",
             "num_runners",
@@ -195,10 +195,10 @@ def build_training_df(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> pl.DataFra
             (pl.col("race_date") - pl.col("last_workout_date"))
             .dt.total_days()
             .alias("days_since_last_workout"),
-            # distance
-            (pl.col("distance") - pl.col("distance_L1")).alias("distance_diff_L1"),
-            (pl.col("distance") - pl.col("distance_L2")).alias("distance_diff_L2"),
-            (pl.col("distance") - pl.col("distance_L3")).alias("distance_diff_L3"),
+            # distance (yards)
+            (pl.col("distance_yards") - pl.col("distance_yards_L1")).alias("distance_diff_L1"),
+            (pl.col("distance_yards") - pl.col("distance_yards_L2")).alias("distance_diff_L2"),
+            (pl.col("distance_yards") - pl.col("distance_yards_L3")).alias("distance_diff_L3"),
             # race class rating
             (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
             (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
@@ -375,19 +375,19 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .first()
             .alias("pp_odds_L3"),
 
-            # distance
-            pl.col("pp_distance_id")
+            # distance (yards)
+            pl.col("pp_distance_yards")
             .filter(pl.col("pp_index") == 1)
             .first()
-            .alias("distance_L1"),
-            pl.col("pp_distance_id")
+            .alias("distance_yards_L1"),
+            pl.col("pp_distance_yards")
             .filter(pl.col("pp_index") == 2)
             .first()
-            .alias("distance_L2"),
-            pl.col("pp_distance_id")
+            .alias("distance_yards_L2"),
+            pl.col("pp_distance_yards")
             .filter(pl.col("pp_index") == 3)
             .first()
-            .alias("distance_L3"),
+            .alias("distance_yards_L3"),
 
             # surface of last race
             pl.col("pp_surface")
