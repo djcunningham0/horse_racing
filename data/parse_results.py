@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
 
-from data.schema import make_race_id, safe_float, safe_int, xml_text
+from data.schema import make_race_id, safe_float, safe_int, to_yards, xml_text
 
 
 def _parse_point_of_calls(entry: ET.Element) -> dict:
@@ -40,6 +40,9 @@ def parse_result_chart(xml_path: Path) -> list[dict]:
         entries = race.findall("ENTRY")
         num_runners = len(entries)
 
+        dist_val = safe_int(xml_text(race, "DISTANCE"))
+        dist_unit = xml_text(race, "DIST_UNIT")
+
         race_fields = {
             "race_id": race_id,
             "race_date": race_date,
@@ -50,9 +53,9 @@ def parse_result_chart(xml_path: Path) -> list[dict]:
             "course_id": xml_text(race, "COURSE_ID"),
             "course_desc": xml_text(race, "COURSE_DESC"),
             "purse": safe_float(xml_text(race, "PURSE")),
-            "distance": safe_int(xml_text(race, "DISTANCE")),
-            "distance_unit": xml_text(race, "DIST_UNIT"),
-            "about_dist_flag": xml_text(race, "ABOUT_DIST_FLAG"),
+            "distance_val": dist_val,
+            "distance_unit": dist_unit,
+            "distance_yards": to_yards(dist_val, dist_unit),
             "run_up_distance": safe_int(xml_text(race, "RUNUPDIST")),
             "surface": xml_text(race, "SURFACE"),
             "track_condition": xml_text(race, "TRK_COND"),

@@ -5,7 +5,14 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
-from data.schema import make_race_id, parse_odds, safe_float, safe_int, xml_text
+from data.schema import (
+    make_race_id,
+    parse_odds,
+    safe_float,
+    safe_int,
+    to_yards,
+    xml_text,
+)
 
 
 def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
@@ -36,6 +43,9 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
         race_date_str = race_date.isoformat() if race_date else ""
         race_id = make_race_id(race_date_str, track or "", race_number)
 
+        dist_val = safe_int(xml_text(race_el, "Distance/DistanceId"))
+        dist_unit = xml_text(race_el, "Distance/DistanceUnit/Value")
+
         race_fields = {
             "race_id": race_id,
             "race_date": race_date,
@@ -45,8 +55,9 @@ def parse_pps_zip(zip_path: Path) -> tuple[list[dict], list[dict], list[dict]]:
             "race_type": xml_text(race_el, "RaceType/RaceType"),
             "race_type_desc": xml_text(race_el, "RaceType/Description"),
             "surface": xml_text(race_el, "Course/CourseType/Value"),
-            "distance_id": safe_int(xml_text(race_el, "Distance/DistanceId")),
-            "distance_published": xml_text(race_el, "Distance/PublishedValue"),
+            "distance_val": dist_val,
+            "distance_unit": dist_unit,
+            "distance_yards": to_yards(dist_val, dist_unit),
             "purse": safe_float(xml_text(race_el, "PurseUSA")),
             "grade": xml_text(race_el, "Grade"),
             "num_runners": safe_int(xml_text(race_el, "NumberOfRunners")),
@@ -153,6 +164,9 @@ def _parse_past_performance(
     """Extract fields from a PastPerformance element."""
     start = pp.find("Start")
 
+    pp_dist_val = safe_int(xml_text(pp, "Distance/DistanceId"))
+    pp_dist_unit = xml_text(pp, "Distance/DistanceUnit/Value")
+
     row = {
         "race_id": race_id,
         "horse_name": horse_name,
@@ -162,7 +176,9 @@ def _parse_past_performance(
         "pp_track": xml_text(pp, "Track/TrackID"),
         "pp_race_number": safe_int(xml_text(pp, "RaceNumber")),
         "pp_race_type": xml_text(pp, "RaceType/RaceType"),
-        "pp_distance_id": safe_int(xml_text(pp, "Distance/DistanceId")),
+        "pp_distance_val": pp_dist_val,
+        "pp_distance_unit": pp_dist_unit,
+        "pp_distance_yards": to_yards(pp_dist_val, pp_dist_unit),
         "pp_surface": xml_text(pp, "Course/CourseType/Value"),
         "pp_track_condition": xml_text(pp, "TrackCondition/Value"),
         "pp_num_starters": safe_int(xml_text(pp, "NumberOfStarters")) or None,
@@ -172,7 +188,7 @@ def _parse_past_performance(
     if start is not None:
         row["pp_post_position"] = safe_int(xml_text(start, "PostPosition"))
         finish = safe_int(xml_text(start, "OfficialFinish"))
-        dnf = (finish or 0) >= 90  # values >= 90 are DNF codes (pulled up, eased, did not finish)
+        dnf = (finish or 0) >= 90  # values >= 90 are DNF codes (pulled up, eased, did not finish)  # fmt: skip
         row["pp_official_finish"] = finish if finish is not None and not dnf else None
         row["pp_speed_figure"] = safe_int(xml_text(start, "SpeedFigure"))
         row["pp_odds"] = parse_odds(xml_text(start, "Odds"))
@@ -222,13 +238,17 @@ def _parse_workout(
     wo: ET.Element, race_id: str, horse_name: str, registration_number: str
 ) -> dict:
     """Extract fields from a Workout element."""
+    wo_dist_val = safe_int(xml_text(wo, "Distance/DistanceId"))
+    wo_dist_unit = xml_text(wo, "Distance/DistanceUnit/Value")
     return {
         "race_id": race_id,
         "horse_name": horse_name,
         "registration_number": registration_number,
         "workout_date": _parse_date(xml_text(wo, "Date")),
         "workout_track": xml_text(wo, "Track/TrackID"),
-        "workout_distance": xml_text(wo, "Distance/PublishedValue"),
+        "workout_distance_val": wo_dist_val,
+        "workout_distance_unit": wo_dist_unit,
+        "workout_distance_yards": to_yards(wo_dist_val, wo_dist_unit),
         "workout_time": xml_text(wo, "Timing"),
         "workout_type": xml_text(wo, "TypeOfWorkout/Value"),
         "workout_course": xml_text(wo, "CourseType/CourseType"),

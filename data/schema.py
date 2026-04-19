@@ -1,5 +1,8 @@
 """Shared helpers for data ingestion."""
 
+FURLONGS_TO_YARDS = 220
+METERS_TO_YARDS = 1.09361
+
 
 def make_race_id(date: str, track: str, race_number: int) -> str:
     """Construct a unique race identifier, e.g. '2023-04-29_CD_R5'."""
@@ -33,6 +36,26 @@ def parse_odds(odds_str: str | None) -> float | None:
             val = val / 100
     # 0 is never a real odds value (floor is ~0.05); treat as missing
     return val if val > 0 else None
+
+
+def to_yards(value: int | None, unit: str | None) -> int | None:
+    """
+    Convert an Equibase distance value + unit to yards (rounded to nearest int).
+
+    Unit encodings in Equibase:
+    - F = furlongs, scaled at 1/100 (e.g., "100 F" means 1 furlong
+    - Y = yards
+    - M = meters
+    """
+    if value is None or unit is None:
+        return None
+    if unit == "F":
+        return round(value / 100 * FURLONGS_TO_YARDS)
+    if unit == "Y":
+        return value
+    if unit == "M":
+        return round(value * METERS_TO_YARDS)
+    return None
 
 
 def safe_int(value: str | None) -> int | None:
