@@ -9,7 +9,7 @@ import logging
 import joblib
 import numpy as np
 import polars as pl
-from xgboost import XGBRanker
+from xgboost import XGBClassifier, XGBRanker
 
 from model.calibration import fit_temperature
 from model.features import (
@@ -22,7 +22,7 @@ from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_HYPERPARAMS = {
+DEFAULT_RANKER_HYPERPARAMS = {
     "objective": "rank:ndcg",
     "tree_method": "hist",
     "n_estimators": 800,
@@ -33,6 +33,24 @@ DEFAULT_HYPERPARAMS = {
     "min_child_weight": 2,
     "early_stopping_rounds": 30,
     "eval_metric": "ndcg@3",
+}
+
+DEFAULT_CLASSIFIER_HYPERPARAMS = {
+    "objective": "binary:logistic",
+    "tree_method": "hist",
+    "n_estimators": 800,
+    "learning_rate": 0.01,
+    "max_depth": 4,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "min_child_weight": 2,
+    "early_stopping_rounds": 30,
+    "eval_metric": "logloss",
+}
+
+DEFAULT_HYPERPARAMS: dict[str, dict] = {
+    "ranker": DEFAULT_RANKER_HYPERPARAMS,
+    "classifier": DEFAULT_CLASSIFIER_HYPERPARAMS,
 }
 
 
@@ -60,28 +78,43 @@ def train(
     features: list[str] = DEFAULT_FEATURE_COLS,
     hyperparameters: dict | None = None,
     use_base_margin: bool = False,
-) -> XGBRanker:
-    params = {**DEFAULT_HYPERPARAMS, **(hyperparameters or {})}
+    model_type: str = "ranker",
+) -> XGBRanker | XGBClassifier:
+    params = {**DEFAULT_HYPERPARAMS[model_type], **(hyperparameters or {})}
 
     X_tr, y_tr, g_tr, m_tr = prepare_df(train_df, features, use_base_margin)
     X_va, y_va, g_va, m_va = prepare_df(val_df, features, use_base_margin)
 
     logger.info(
-        f"train: {len(y_tr):,} rows / {len(g_tr):,} races | "
+        f"train ({model_type}): {len(y_tr):,} rows / {len(g_tr):,} races | "
         f"val: {len(y_va):,} rows / {len(g_va):,} races"
     )
 
-    model = XGBRanker(**params)
-    model.fit(
-        X_tr,
-        y_tr,
-        group=g_tr,
-        base_margin=m_tr,
-        eval_set=[(X_va, y_va)],
-        eval_group=[g_va],
-        base_margin_eval_set=[m_va] if use_base_margin else None,
-        verbose=50,
-    )
+    if model_type == "ranker":
+        model = XGBRanker(**params)
+        model.fit(
+            X_tr,
+            y_tr,
+            group=g_tr,
+            base_margin=m_tr,
+            eval_set=[(X_va, y_va)],
+            eval_group=[g_va],
+            base_margin_eval_set=[m_va] if use_base_margin else None,
+            verbose=50,
+        )
+    elif model_type == "classifier":
+        model = XGBClassifier(**params)
+        model.fit(
+            X_tr,
+            y_tr,
+            base_margin=m_tr,
+            eval_set=[(X_va, y_va)],
+            base_margin_eval_set=[m_va] if use_base_margin else None,
+            verbose=50,
+        )
+    else:
+        raise ValueError(f"unknown model_type: {model_type!r}")
+
     return model
 
 
@@ -104,6 +137,7 @@ def main():
             "features": DEFAULT_FEATURE_COLS,
             "temperature": temperature,
             "use_base_margin": False,
+            "model_type": "ranker",
         },
         out_path,
     )

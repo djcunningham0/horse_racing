@@ -14,6 +14,7 @@ import polars as pl
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
 from model.features import base_margin_from_market_prob, build_training_df, split_by_race
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
+from model.predict import predict_scores
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ def _metrics_for_split(
     # derive base_margin before _market_probs overwrites market_prob with a
     # version computed from final dollar_odds
     base_margin = base_margin_from_market_prob(split_df) if use_base_margin else None
-    scores = model.predict(X, base_margin=base_margin)
+    scores = predict_scores(model, X, base_margin=base_margin)
     split_df = split_df.with_columns(pl.Series("model_score", scores))
     split_df = _per_race_softmax(
         split_df,

@@ -13,6 +13,7 @@ from scipy.optimize import minimize_scalar
 
 from model.evaluate import _log_loss_winner, _per_race_softmax
 from model.features import base_margin_from_market_prob
+from model.predict import predict_scores
 
 T_SEARCH_BOUNDS = (0.1, 10.0)
 
@@ -32,7 +33,7 @@ def fit_temperature(
     """
     X = df.select(features).to_numpy()
     base_margin = base_margin_from_market_prob(df) if use_base_margin else None
-    scores = model.predict(X, base_margin=base_margin)
+    scores = predict_scores(model, X, base_margin=base_margin)
     df = df.with_columns(pl.Series("__score", scores))
     df = df.filter(pl.col("won").max().over("race_id") == 1)
 
@@ -60,7 +61,7 @@ def log_loss_at_T(
     """Convenience: winner log-loss on `df` at a given temperature."""
     X = df.select(features).to_numpy()
     base_margin = base_margin_from_market_prob(df) if use_base_margin else None
-    scores = model.predict(X, base_margin=base_margin)
+    scores = predict_scores(model, X, base_margin=base_margin)
     tmp = df.with_columns(pl.Series("_s", scores / temperature))
     tmp = tmp.filter(pl.col("won").max().over("race_id") == 1)
     tmp = _per_race_softmax(tmp, "_s", "_p")

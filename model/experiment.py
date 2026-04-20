@@ -42,12 +42,19 @@ def main():
         action="store_true",
         help="Use logit(market_prob) as XGBoost base_margin",
     )
+    parser.add_argument(
+        "--model-type",
+        choices=["ranker", "classifier"],
+        default="ranker",
+        help="XGBoost model type",
+    )
     args = parser.parse_args()
 
     run_id = run_experiment(
         label=args.label,
         description=args.description,
         use_base_margin=args.use_base_margin,
+        model_type=args.model_type,
     )
     logging.info(f"finished run ID: {run_id}")
 
@@ -59,10 +66,11 @@ def run_experiment(
     hyperparameters: dict | None = None,
     split_kwargs: dict | None = None,
     use_base_margin: bool = False,
+    model_type: str = "ranker",
 ) -> str:
     """Train, evaluate, and log an experiment to MLflow. Returns the MLflow run ID."""
     features = features or DEFAULT_FEATURE_COLS
-    params = {**DEFAULT_HYPERPARAMS, **(hyperparameters or {})}
+    params = {**DEFAULT_HYPERPARAMS[model_type], **(hyperparameters or {})}
     split_kwargs = split_kwargs or {}
 
     mlflow.set_experiment(EXPERIMENT_NAME)
@@ -78,6 +86,7 @@ def run_experiment(
         mlflow.log_param("n_features", len(features))
         mlflow.log_param("features", ", ".join(features))
         mlflow.log_param("use_base_margin", use_base_margin)
+        mlflow.log_param("model_type", model_type)
         for k, v in split_kwargs.items():
             mlflow.log_param(f"split.{k}", v)
 
@@ -92,6 +101,7 @@ def run_experiment(
             features=features,
             hyperparameters=params,
             use_base_margin=use_base_margin,
+            model_type=model_type,
         )
 
         # fit softmax temperature on val
@@ -126,6 +136,7 @@ def run_experiment(
                 "features": features,
                 "temperature": temperature,
                 "use_base_margin": use_base_margin,
+                "model_type": model_type,
             },
             artifact_path,
         )
