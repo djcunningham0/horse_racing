@@ -416,3 +416,59 @@ def summarize_bet_rule(df: pl.DataFrame, rule: str, **kwargs) -> dict:
     """Convenience wrapper around apply_bet_rule + summarize_roi."""
     bets = apply_bet_rule(df, rule=rule, **kwargs)
     return summarize_roi(bets)
+
+
+# ---------- conditional-on-bet diagnostics ----------
+
+
+def positive_ev_slice_summary(df: pl.DataFrame, ev_threshold: float = 0.0) -> dict:
+    """Headline stats on horses flagged `ev_per_dollar > ev_threshold`.
+
+    Compares the model's *predicted* win rate / EV on the slice against the
+    *realized* hit rate / EV, plus the market's prob on the same rows.  Gaps
+    between predicted and empirical on this slice quantify selection bias: if
+    `predicted_prob >> empirical_rate`, the +EV filter is preferentially
+    selecting model errors rather than genuinely underpriced horses.
+    """
+    slice_df = df.filter(pl.col("ev_per_dollar") > ev_threshold)
+    if slice_df.is_empty():
+        return {"ev_threshold": ev_threshold, "n_bets": 0}
+    won = slice_df["won"].to_numpy()
+    dec = slice_df["decimal_odds"].to_numpy()
+    return {
+        "ev_threshold": ev_threshold,
+        "n_bets": int(slice_df.shape[0]),
+        "mean_predicted_prob": float(slice_df["model_prob"].mean()),
+        "mean_market_prob": float(slice_df["market_prob"].mean()),
+        "empirical_hit_rate": float(won.mean()),
+        "mean_predicted_ev": float(slice_df["ev_per_dollar"].mean()),
+        "realized_ev_per_dollar": float((won * dec - 1.0).mean()),
+    }
+
+
+def conditional_reliability_table(
+    df: pl.DataFrame,
+    filter_expr: pl.Expr,
+    prob_col: str = "model_prob",
+    edges: list[float] = DEFAULT_RELIABILITY_EDGES,
+) -> pl.DataFrame:
+    """reliability_table on a filtered slice (e.g., horses bet under a rule)."""
+    return reliability_table(df.filter(filter_expr), prob_col=prob_col, edges=edges)
+
+
+def conditional_log_loss(df: pl.DataFrame, filter_expr: pl.Expr) -> dict:
+    """Winner log-loss for model vs market on rows matching filter_expr.
+
+    Restricts to races where a horse matching `filter_expr` actually won (so the
+    winner is in the slice and log-loss is well-defined).
+    """
+    slice_df = df.filter(filter_expr)
+    winning_race_ids = slice_df.filter(pl.col("won") == 1)["race_id"].unique()
+    sub = slice_df.filter(pl.col("race_id").is_in(winning_race_ids))
+    if sub.is_empty():
+        return {"n_races": 0, "model_log_loss": float("nan"), "market_log_loss": float("nan")}
+    return {
+        "n_races": int(winning_race_ids.len()),
+        "model_log_loss": _log_loss_winner(sub, "model_prob"),
+        "market_log_loss": _log_loss_winner(sub, "market_prob"),
+    }
