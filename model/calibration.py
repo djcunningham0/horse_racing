@@ -13,7 +13,7 @@ from scipy.optimize import minimize_scalar
 
 from model.evaluate import _log_loss_winner, _per_race_softmax
 
-T_SEARCH_BOUNDS = (0.01, 10.0)
+T_SEARCH_BOUNDS = (0.1, 10.0)
 
 
 def fit_temperature(
