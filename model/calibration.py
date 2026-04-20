@@ -12,6 +12,7 @@ import polars as pl
 from scipy.optimize import minimize_scalar
 
 from model.evaluate import _log_loss_winner, _per_race_softmax
+from model.features import base_margin_from_market_prob
 
 T_SEARCH_BOUNDS = (0.1, 10.0)
 
@@ -21,6 +22,7 @@ def fit_temperature(
     df: pl.DataFrame,
     features: list[str],
     bounds: tuple[float, float] = T_SEARCH_BOUNDS,
+    use_base_margin: bool = False,
 ) -> float:
     """
     Find T > 0 minimizing winner log-loss on `df` for softmax(score / T).
@@ -29,7 +31,8 @@ def fit_temperature(
     dropped before fitting.
     """
     X = df.select(features).to_numpy()
-    scores = model.predict(X)
+    base_margin = base_margin_from_market_prob(df) if use_base_margin else None
+    scores = model.predict(X, base_margin=base_margin)
     df = df.with_columns(pl.Series("__score", scores))
     df = df.filter(pl.col("won").max().over("race_id") == 1)
 
@@ -52,10 +55,12 @@ def log_loss_at_T(
     df: pl.DataFrame,
     features: list[str],
     temperature: float = 1.0,
+    use_base_margin: bool = False,
 ) -> float:
     """Convenience: winner log-loss on `df` at a given temperature."""
     X = df.select(features).to_numpy()
-    scores = model.predict(X)
+    base_margin = base_margin_from_market_prob(df) if use_base_margin else None
+    scores = model.predict(X, base_margin=base_margin)
     tmp = df.with_columns(pl.Series("_s", scores / temperature))
     tmp = tmp.filter(pl.col("won").max().over("race_id") == 1)
     tmp = _per_race_softmax(tmp, "_s", "_p")

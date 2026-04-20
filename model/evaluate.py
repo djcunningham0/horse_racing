@@ -12,7 +12,7 @@ import numpy as np
 import polars as pl
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
-from model.features import build_training_df, split_by_race
+from model.features import base_margin_from_market_prob, build_training_df, split_by_race
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 logger = logging.getLogger(__name__)
@@ -91,9 +91,13 @@ def _metrics_for_split(
     model,
     features: list[str],
     temperature: float = 1.0,
+    use_base_margin: bool = False,
 ) -> dict:
     X = split_df.select(features).to_numpy()
-    scores = model.predict(X)
+    # derive base_margin before _market_probs overwrites market_prob with a
+    # version computed from final dollar_odds
+    base_margin = base_margin_from_market_prob(split_df) if use_base_margin else None
+    scores = model.predict(X, base_margin=base_margin)
     split_df = split_df.with_columns(pl.Series("model_score", scores))
     split_df = _per_race_softmax(
         split_df,
@@ -186,12 +190,19 @@ def evaluate_splits(
     val_df: pl.DataFrame,
     test_df: pl.DataFrame,
     temperature: float = 1.0,
+    use_base_margin: bool = False,
 ) -> dict[str, dict]:
     """Compute metrics on all three splits. Returns dict keyed by split name."""
     return {
-        "train": _metrics_for_split(train_df, model, features, temperature),
-        "val": _metrics_for_split(val_df, model, features, temperature),
-        "test": _metrics_for_split(test_df, model, features, temperature),
+        "train": _metrics_for_split(
+            train_df, model, features, temperature, use_base_margin
+        ),
+        "val": _metrics_for_split(
+            val_df, model, features, temperature, use_base_margin
+        ),
+        "test": _metrics_for_split(
+            test_df, model, features, temperature, use_base_margin
+        ),
     }
 
 
@@ -201,6 +212,7 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
     model = bundle["model"]
     features = bundle["features"]
     temperature = bundle.get("temperature", 1.0)
+    use_base_margin = bundle.get("use_base_margin", False)
     logger.info(f"using temperature T={temperature:.4f}")
 
     df = build_training_df()
@@ -213,6 +225,7 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
         val_df=val_df,
         test_df=test_df,
         temperature=temperature,
+        use_base_margin=use_base_margin,
     )
     print_metrics_table(metrics)
     return metrics

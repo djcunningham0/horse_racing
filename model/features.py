@@ -468,6 +468,17 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
     # fmt: on
 
 
+def base_margin_from_market_prob(df: pl.DataFrame) -> np.ndarray:
+    """Logit of ``market_prob``, clipped to avoid infinities at the boundaries.
+
+    Intended for use as ``base_margin`` at train and inference time, so the
+    model learns corrections relative to market-implied probabilities.
+    """
+    p = df["market_prob"].to_numpy()
+    p = np.clip(p, 1e-4, 1.0 - 1e-4)
+    return np.log(p / (1.0 - p))
+
+
 def _dollar_odds_plus_noise(
     dollar_odds: pl.Expr,
     morning_line: pl.Expr,

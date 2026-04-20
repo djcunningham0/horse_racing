@@ -37,9 +37,18 @@ def main():
     parser = argparse.ArgumentParser(description="Run a model experiment")
     parser.add_argument("--label", required=True, help="Short name for this run")
     parser.add_argument("--description", default="", help="Longer description")
+    parser.add_argument(
+        "--use-base-margin",
+        action="store_true",
+        help="Use logit(market_prob) as XGBoost base_margin",
+    )
     args = parser.parse_args()
 
-    run_id = run_experiment(label=args.label, description=args.description)
+    run_id = run_experiment(
+        label=args.label,
+        description=args.description,
+        use_base_margin=args.use_base_margin,
+    )
     logging.info(f"finished run ID: {run_id}")
 
 
@@ -49,6 +58,7 @@ def run_experiment(
     features: list[str] | None = None,
     hyperparameters: dict | None = None,
     split_kwargs: dict | None = None,
+    use_base_margin: bool = False,
 ) -> str:
     """Train, evaluate, and log an experiment to MLflow. Returns the MLflow run ID."""
     features = features or DEFAULT_FEATURE_COLS
@@ -67,6 +77,7 @@ def run_experiment(
         mlflow.log_params(params)
         mlflow.log_param("n_features", len(features))
         mlflow.log_param("features", ", ".join(features))
+        mlflow.log_param("use_base_margin", use_base_margin)
         for k, v in split_kwargs.items():
             mlflow.log_param(f"split.{k}", v)
 
@@ -75,10 +86,18 @@ def run_experiment(
         train_df, val_df, test_df = split_by_race(df, **split_kwargs)
 
         # train
-        model = train(train_df, val_df, features=features, hyperparameters=params)
+        model = train(
+            train_df,
+            val_df,
+            features=features,
+            hyperparameters=params,
+            use_base_margin=use_base_margin,
+        )
 
         # fit softmax temperature on val
-        temperature = fit_temperature(model, val_df, features)
+        temperature = fit_temperature(
+            model, val_df, features, use_base_margin=use_base_margin
+        )
         logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
         mlflow.log_metric("temperature", temperature)
 
@@ -90,6 +109,7 @@ def run_experiment(
             val_df=val_df,
             test_df=test_df,
             temperature=temperature,
+            use_base_margin=use_base_margin,
         )
         print_metrics_table(metrics)
         _log_metrics_to_mlflow(metrics)
@@ -101,7 +121,12 @@ def run_experiment(
         DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
         artifact_path = DEFAULT_MODEL_DIR / f"{run.info.run_id}.joblib"
         joblib.dump(
-            {"model": model, "features": features, "temperature": temperature},
+            {
+                "model": model,
+                "features": features,
+                "temperature": temperature,
+                "use_base_margin": use_base_margin,
+            },
             artifact_path,
         )
         mlflow.log_artifact(str(artifact_path))
@@ -143,7 +168,7 @@ def _log_feature_importance(model, features: list[str], val_df):
 
         # -- SHAP --
         explainer = shap.TreeExplainer(model)
-        X_val, _, _ = prepare_df(val_df, features)
+        X_val, _, _, _ = prepare_df(val_df, features)
         shap_values = explainer.shap_values(X_val)
         explanation = shap.Explanation(
             shap_values,
