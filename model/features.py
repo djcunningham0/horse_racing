@@ -23,6 +23,8 @@ DEFAULT_FEATURE_COLS: list[str] = [
     "ml_odds_rank",
     "dollar_odds_plus_noise",
     "dollar_odds_plus_noise_rank",
+    "market_prob_raw",
+    "market_prob",
     # race characteristics
     "field_size",
     "distance_yards",
@@ -267,6 +269,17 @@ def build_training_df(
             .rank(method="min")
             .over("race_id")
             .alias("dollar_odds_plus_noise_rank"),
+        )
+        .with_columns(
+            # implied win probability from odds
+            (1 / (pl.col("dollar_odds_plus_noise") + 1)).alias("market_prob_raw"),
+        )
+        .with_columns(
+            # implied win probability (continued)
+            # raw probs sum to >1 within a race due to track takeout, so also normalize
+            # to sum to 1
+            (pl.col("market_prob_raw") / pl.col("market_prob_raw").sum().over("race_id"))
+            .alias("market_prob"),
         )
         .drop("last_pp_date", "last_workout_date", "_course_type", "_pp_course_type_L1")
     )
@@ -542,7 +555,6 @@ def get_race_id_splits(
     val_frac: float = DEFAULT_VAL_FRAC,
     test_frac: float = DEFAULT_TEST_FRAC,
     seed: int = DEFAULT_RANDOM_SEED,
-    id_col: str = "race_id",
 ) -> tuple[NDArray[np.str_], NDArray[np.str_], NDArray[np.str_]]:
     """
     Return the (train_ids, val_ids, test_ids) to split races in to train, validation,
