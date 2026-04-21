@@ -4,6 +4,7 @@ Usage:
     python -m model.train
 """
 
+import argparse
 import logging
 
 import joblib
@@ -122,11 +123,33 @@ def main():
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
+
+    parser = argparse.ArgumentParser(description="Train a horse racing model")
+    parser.add_argument(
+        "--model-type",
+        choices=["ranker", "classifier"],
+        default="ranker",
+        help="XGBoost model type",
+    )
+    parser.add_argument(
+        "--use-base-margin",
+        action="store_true",
+        help="Use logit(market_prob) as XGBoost base_margin",
+    )
+    args = parser.parse_args()
+
     df = build_training_df()
     train_df, val_df, _ = split_by_race(df)
-    model = train(train_df, val_df)
+    model = train(
+        train_df,
+        val_df,
+        use_base_margin=args.use_base_margin,
+        model_type=args.model_type,
+    )
 
-    temperature = fit_temperature(model, val_df, DEFAULT_FEATURE_COLS)
+    temperature = fit_temperature(
+        model, val_df, DEFAULT_FEATURE_COLS, use_base_margin=args.use_base_margin
+    )
     logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
 
     DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -136,8 +159,8 @@ def main():
             "model": model,
             "features": DEFAULT_FEATURE_COLS,
             "temperature": temperature,
-            "use_base_margin": False,
-            "model_type": "ranker",
+            "use_base_margin": args.use_base_margin,
+            "model_type": args.model_type,
         },
         out_path,
     )
