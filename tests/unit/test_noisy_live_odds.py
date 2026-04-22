@@ -51,6 +51,17 @@ def test_takeout_preserved(small_race):
     assert np.allclose(implied_sum, final_sum, atol=1e-6)
 
 
+def test_max_odds_clamp():
+    # longshot with implied share well below the floor should never exceed max_odds
+    final = np.array([2.0, 4.0, 8.0, 200.0])
+    ml = np.array([2.5, 3.5, 10.0, 150.0])
+    race_codes = np.zeros(4, dtype=np.int64)
+    cfg = NoisyOddsConfig(max_odds=30.0, kappa=50.0)
+    for seed in range(20):
+        odds = _noisy_live_odds_numpy(final, ml, race_codes, cfg, seed=seed)
+        assert odds.max() <= 30.0 + 1e-9
+
+
 def test_seed_reproducible(small_race):
     final, ml, race_codes = small_race
 

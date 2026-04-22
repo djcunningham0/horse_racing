@@ -1,5 +1,6 @@
 """Build the modeling dataset from processed parquet files."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -7,6 +8,19 @@ import polars as pl
 from numpy.typing import NDArray
 
 from model.paths import DEFAULT_PROCESSED_DIR
+
+
+@dataclass(frozen=True)
+class NoisyOddsConfig:
+    """Hyperparameters for the mid-pool live-odds simulator."""
+
+    beta_a: float = 2.0
+    beta_b: float = 5.0
+    kappa: float = 500.0
+    max_odds: float = 99.0
+
+
+DEFAULT_NOISY_ODDS_CONFIG = NoisyOddsConfig()
 
 # settings for random split
 DEFAULT_VAL_FRAC = 0.15
@@ -21,9 +35,8 @@ DEFAULT_FEATURE_COLS: list[str] = [
     # odds
     "morning_line_odds_float",
     "ml_odds_rank",
-    "dollar_odds_plus_noise",
-    "dollar_odds_plus_noise_rank",
-    "market_prob_raw",
+    "live_odds",
+    "live_odds_rank",
     "market_prob",
     # race characteristics
     "field_size",
@@ -104,6 +117,7 @@ DEFAULT_FEATURE_COLS: list[str] = [
 
 def build_training_df(
     processed_dir: Path | str = DEFAULT_PROCESSED_DIR,
+    seed: int | None = None,
 ) -> pl.DataFrame:
     """Assemble one row per horse-in-a-race with features and label."""
     if isinstance(processed_dir, str):
@@ -253,11 +267,14 @@ def build_training_df(
             ).alias("surface_top3_rate"),
         )
         .with_columns(
-            # add noise to final odds to simulate mid-pool odds
-            # TODO: don't add noise in the final inference pipeline
-            _dollar_odds_plus_noise(
-                pl.col("dollar_odds"), pl.col("morning_line_odds_float")
-            ).alias("dollar_odds_plus_noise"),
+            # simulate mid-pool live odds from ML + final
+            # TODO: at inference, replace with actual live tote odds
+            _noisy_live_odds(
+                pl.col("dollar_odds"),
+                pl.col("morning_line_odds_float"),
+                pl.col("race_id"),
+                seed=seed,
+            ).alias("live_odds"),
         )
         .with_columns(
             # odds ordinal rank within field (1 = favorite; ties share the lower rank)
@@ -265,23 +282,28 @@ def build_training_df(
             .rank(method="min")
             .over("race_id")
             .alias("ml_odds_rank"),
-            pl.col("dollar_odds_plus_noise")
+            pl.col("live_odds")
             .rank(method="min")
             .over("race_id")
-            .alias("dollar_odds_plus_noise_rank"),
+            .alias("live_odds_rank"),
         )
         .with_columns(
-            # implied win probability from odds
-            (1 / (pl.col("dollar_odds_plus_noise") + 1)).alias("market_prob_raw"),
+            # implied win probability from live odds, normalized per race
+            # (noisy shares already sum to ~1 by construction, but takeout re-embedding
+            # and numerical floors can perturb the sum; normalize for safety)
+            (1 / (pl.col("live_odds") + 1)).alias("_market_prob_raw"),
         )
         .with_columns(
-            # implied win probability (continued)
-            # raw probs sum to >1 within a race due to track takeout, so also normalize
-            # to sum to 1
-            (pl.col("market_prob_raw") / pl.col("market_prob_raw").sum().over("race_id"))
+            (pl.col("_market_prob_raw") / pl.col("_market_prob_raw").sum().over("race_id"))
             .alias("market_prob"),
         )
-        .drop("last_pp_date", "last_workout_date", "_course_type", "_pp_course_type_L1")
+        .drop(
+            "last_pp_date",
+            "last_workout_date",
+            "_course_type",
+            "_pp_course_type_L1",
+            "_market_prob_raw",
+        )
     )
     # fmt: on
     return df
@@ -479,59 +501,103 @@ def base_margin_from_market_prob(df: pl.DataFrame) -> np.ndarray:
     return np.log(p / (1.0 - p))
 
 
-def _dollar_odds_plus_noise(
+def _noisy_live_odds(
     dollar_odds: pl.Expr,
     morning_line: pl.Expr,
-    p_exact: float = 0.5,
-    p_interior: float = 0.75,
+    race_id: pl.Expr,
+    config: NoisyOddsConfig = DEFAULT_NOISY_ODDS_CONFIG,
+    seed: int | None = None,
 ) -> pl.Expr:
     """
-    Simulate mid-pool odds. With some probability `p_exact` use the final odds exactly.
-    Otherwise, add random noise between the final odds and the morning line (interior)
-    with probability `p_interior`, or between the final odds and 20% better than the
-    morning line (overshoot) with probability `1 - p_interior`.
+    Simulate mid-pool live odds via pool-share interpolation.
 
-    Rounded to nearest 0.5 to mimic tote board increments.
+    For each race: sample alpha ~ Beta(a, b) as the pool-maturity parameter, interpolate
+    pool shares from ML to final, add Dirichlet jitter with concentration kappa, then
+    re-embed the race's takeout and invert back to odds.
     """
-    return pl.struct(dollar_odds, morning_line).map_batches(
-        lambda s: _compute_odds_noise(s, p_exact, p_interior),
+    return pl.struct(dollar_odds, morning_line, race_id).map_batches(
+        lambda s: _compute_noisy_live_odds(s, config, seed),
         return_dtype=pl.Float64,
     )
 
 
-def _compute_odds_noise(s: pl.Series, p_exact: float, p_interior: float) -> pl.Series:
-    """
-    Row-level random noise simulating non-final tote odds.
-
-    Suppose p_exact = 0.5 and p_interior = 0.75. Then:
-    - 50%: use final odds exactly
-    - 37.5%: uniform between final and ML (interior)
-    - 12.5%: uniform between final and 20% better than ML (overshoot)
-    """
+def _compute_noisy_live_odds(
+    s: pl.Series,
+    config: NoisyOddsConfig,
+    seed: int | None,
+) -> pl.Series:
+    """Polars wrapper around _noisy_live_odds_numpy."""
     df = s.struct.unnest()
-    dollar_odds = df["dollar_odds"].to_numpy(zero_copy_only=False).astype(float)
-    ml_odds = df["morning_line_odds_float"].to_numpy(zero_copy_only=False).astype(float)
+    final = df["dollar_odds"].to_numpy(zero_copy_only=False).astype(float)
+    ml = df["morning_line_odds_float"].to_numpy(zero_copy_only=False).astype(float)
+    race_id = df["race_id"].to_numpy(zero_copy_only=False)
+    _, race_codes = np.unique(race_id, return_inverse=True)
+    odds = _noisy_live_odds_numpy(final, ml, race_codes, config, seed)
+    return pl.Series(odds)
 
-    n = len(dollar_odds)
-    rng = np.random.default_rng()
-    roll_1 = rng.random(n)
-    roll_2 = rng.random(n)
-    noise = rng.random(n)
-    diff = ml_odds - dollar_odds
 
-    # p_exact final; otherwise p_interior between final and ML, 1 - p_interior overshoot
-    noisy_odds = np.where(
-        roll_1 < p_exact,
-        dollar_odds,
-        np.where(
-            roll_2 < p_interior,
-            dollar_odds + noise * diff,  # interior
-            dollar_odds - noise * 0.2 * diff,  # overshoot past final
-        ),
-    )
-    noisy_odds = np.round(noisy_odds, 1)  # round to nearest 0.1
-    noisy_odds = np.maximum(noisy_odds, 0.05)  # floor at lowest observed odds
-    return pl.Series(noisy_odds)
+def _noisy_live_odds_numpy(
+    final: NDArray[np.float64],
+    ml: NDArray[np.float64],
+    race_codes: NDArray[np.int64],
+    config: NoisyOddsConfig,
+    seed: int | None,
+) -> NDArray[np.float64]:
+    """
+    Inputs are per-row; race_codes groups rows into races (contiguous integer codes
+    0..n_races-1).
+    """
+    rng = np.random.default_rng(seed)
+    n_races = int(race_codes.max()) + 1
+
+    # implied probs
+    p_ml = 1.0 / (ml + 1.0)
+    p_fin = 1.0 / (final + 1.0)
+
+    # race-level takeout from final odds (overround above 1)
+    p_fin_sum = np.bincount(race_codes, weights=p_fin, minlength=n_races)
+    takeout = p_fin_sum - 1.0  # one scalar per race
+
+    # normalize to pool shares (sum to 1 per race)
+    p_ml_sum = np.bincount(race_codes, weights=p_ml, minlength=n_races)
+    ml_share = p_ml / p_ml_sum[race_codes]
+    fin_share = p_fin / p_fin_sum[race_codes]
+
+    # one alpha per race, broadcast to rows
+    alpha = rng.beta(config.beta_a, config.beta_b, size=n_races)[race_codes]
+
+    # interpolated shares (still sum to 1 per race since both endpoints do)
+    interp = (1.0 - alpha) * ml_share + alpha * fin_share
+
+    # Dirichlet jitter via the Gamma trick
+    g = rng.gamma(shape=config.kappa * interp, scale=1.0)
+    g_sum = np.bincount(race_codes, weights=g, minlength=n_races)
+    noisy = g / g_sum[race_codes]
+
+    # re-embed takeout so implied probs sum to (1 + takeout) as in real odds
+    noisy_implied = noisy * (1.0 + takeout[race_codes])
+
+    # floor implied probs at p_min = 1/(max_odds+1)
+    # Renormalize free horses to keep the per-race sum = (1 + takeout). Iterate since
+    # renormalization can push previously-free horses below the floor.
+    p_min = 1.0 / (config.max_odds + 1.0)
+    target = 1.0 + takeout
+    for _ in range(5):
+        pegged = noisy_implied < p_min
+        noisy_implied = np.where(pegged, p_min, noisy_implied)
+        pegged_mass = np.bincount(
+            race_codes, weights=np.where(pegged, p_min, 0.0), minlength=n_races
+        )
+        free_mass = np.bincount(
+            race_codes, weights=np.where(pegged, 0.0, noisy_implied), minlength=n_races
+        )
+        remaining = target - pegged_mass
+        scale = np.where(free_mass > 0, remaining / np.maximum(free_mass, 1e-12), 1.0)
+        noisy_implied = np.where(pegged, p_min, noisy_implied * scale[race_codes])
+
+    # numerical safety: keep implied prob strictly below 1 so odds stay positive
+    noisy_implied = np.minimum(noisy_implied, 1.0 - 1e-6)
+    return (1.0 - noisy_implied) / noisy_implied
 
 
 def split_by_race(
