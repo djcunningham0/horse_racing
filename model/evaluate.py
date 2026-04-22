@@ -93,7 +93,7 @@ def _metrics_for_split(
     split_df: pl.DataFrame,
     pipeline: Pipeline,
     temperature: float = 1.0,
-    use_base_margin: bool = False,
+    use_base_margin: bool = True,
 ) -> dict:
     split_df = pipeline.named_steps["derive"].transform(split_df)
     X = pipeline.named_steps["select"].transform(split_df)
@@ -198,7 +198,7 @@ def evaluate_splits(
     val_df: pl.DataFrame,
     test_df: pl.DataFrame,
     temperature: float = 1.0,
-    use_base_margin: bool = False,
+    use_base_margin: bool = True,
 ) -> dict[str, dict]:
     """Compute metrics on all three splits. Returns dict keyed by split name."""
     return {
@@ -212,8 +212,8 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
     """Load model from disk and evaluate. Convenience entrypoint."""
     bundle = joblib.load(model_dir / MODEL_FILENAME)
     pipeline = bundle["pipeline"]
-    temperature = bundle.get("temperature", 1.0)
-    use_base_margin = bundle.get("use_base_margin", False)
+    temperature = bundle["temperature"]
+    use_base_margin = bundle["use_base_margin"]
     logger.info(f"using temperature T={temperature:.4f}")
 
     df = build_raw_df()

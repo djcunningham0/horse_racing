@@ -63,7 +63,7 @@ DEFAULT_HYPERPARAMS: dict[str, dict] = {
 
 def prepare_df(
     df: pl.DataFrame,
-    use_base_margin: bool = False,
+    use_base_margin: bool = True,
 ) -> tuple[pl.DataFrame, np.ndarray, np.ndarray, np.ndarray | None]:
     """Return (X_raw, y, group_sizes, base_margin) sorted by race_id.
 
@@ -100,8 +100,8 @@ def train(
     val_df: pl.DataFrame,
     features: list[str] | None = None,
     hyperparameters: dict | None = None,
-    use_base_margin: bool = False,
-    model_type: str = "ranker",
+    use_base_margin: bool = True,
+    model_type: str = "classifier",
 ) -> Pipeline:
     """Fit a feature + model sklearn Pipeline.
 
@@ -174,6 +174,12 @@ def train(
     return pipeline
 
 
+def _temperature_arg(value: str) -> float | str:
+    if value == "auto":
+        return "auto"
+    return float(value)
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -183,19 +189,20 @@ def main():
     parser.add_argument(
         "--model-type",
         choices=["ranker", "classifier"],
-        default="ranker",
+        default="classifier",
         help="XGBoost model type",
     )
     parser.add_argument(
         "--use-base-margin",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Use logit(market_prob) as XGBoost base_margin",
     )
     parser.add_argument(
         "--temperature",
-        type=float,
-        default=None,
-        help="Fixed softmax temperature. If unset, fit on the validation set.",
+        type=_temperature_arg,
+        default=1.0,
+        help="Softmax temperature (float) or 'auto' to fit on the validation set.",
     )
     live_odds = parser.add_mutually_exclusive_group()
     live_odds.add_argument(
@@ -222,7 +229,7 @@ def main():
         model_type=args.model_type,
     )
 
-    if args.temperature is None:
+    if args.temperature == "auto":
         temperature = fit_temperature(
             pipeline, val_df, use_base_margin=args.use_base_margin
         )

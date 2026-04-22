@@ -23,7 +23,7 @@ def fit_temperature(
     pipeline: Pipeline,
     df: pl.DataFrame,
     bounds: tuple[float, float] = T_SEARCH_BOUNDS,
-    use_base_margin: bool = False,
+    use_base_margin: bool = True,
 ) -> float:
     """
     Find T > 0 minimizing winner log-loss on `df` for softmax(score / T).
@@ -60,7 +60,7 @@ def log_loss_at_T(
     pipeline: Pipeline,
     df: pl.DataFrame,
     temperature: float = 1.0,
-    use_base_margin: bool = False,
+    use_base_margin: bool = True,
 ) -> float:
     """Convenience: winner log-loss on `df` at a given temperature."""
     derived = pipeline.named_steps["derive"].transform(df)

@@ -24,7 +24,7 @@ from model.evaluate import print_metrics_table, evaluate_splits
 from model.feature_pipeline import FEATURE_NAMES
 from model.features import build_raw_df, split_by_race
 from model.paths import DEFAULT_MODEL_DIR
-from model.train import DEFAULT_HYPERPARAMS, prepare_df, train
+from model.train import DEFAULT_HYPERPARAMS, _temperature_arg, prepare_df, train
 
 logger = logging.getLogger(__name__)
 
@@ -41,20 +41,21 @@ def main():
     parser.add_argument("--description", default="", help="Longer description")
     parser.add_argument(
         "--use-base-margin",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Use logit(market_prob) as XGBoost base_margin",
     )
     parser.add_argument(
         "--model-type",
         choices=["ranker", "classifier"],
-        default="ranker",
+        default="classifier",
         help="XGBoost model type",
     )
     parser.add_argument(
         "--temperature",
-        type=float,
-        default=None,
-        help="Fixed softmax temperature. If unset, fit on the validation set.",
+        type=_temperature_arg,
+        default=1.0,
+        help="Softmax temperature (float) or 'auto' to fit on the validation set.",
     )
     live_odds = parser.add_mutually_exclusive_group()
     live_odds.add_argument(
@@ -87,9 +88,9 @@ def run_experiment(
     features: list[str] | None = None,
     hyperparameters: dict | None = None,
     split_kwargs: dict | None = None,
-    use_base_margin: bool = False,
-    model_type: str = "ranker",
-    temperature: float | None = None,
+    use_base_margin: bool = True,
+    model_type: str = "classifier",
+    temperature: float | str = 1.0,
     use_morning_line_as_live: bool = False,
     use_final_as_live: bool = False,
 ) -> str:
@@ -134,14 +135,15 @@ def run_experiment(
             model_type=model_type,
         )
 
-        # softmax temperature: fixed if provided, else fit on val
-        fit_temp = temperature is None
+        # softmax temperature: fixed if a float, else fit on val
+        fit_temp = temperature == "auto"
         if fit_temp:
             temperature = fit_temperature(
                 pipeline, val_df, use_base_margin=use_base_margin
             )
             logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
         else:
+            temperature = float(temperature)
             logger.info(f"using fixed softmax temperature: T={temperature:.4f}")
         mlflow.log_metric("temperature", temperature)
         mlflow.log_param("temperature_fitted", fit_temp)

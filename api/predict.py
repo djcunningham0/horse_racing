@@ -27,7 +27,7 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
     pipeline = model_bundle["pipeline"]
     model = pipeline.named_steps["model"]
     feature_names = list(pipeline.named_steps["select"].get_feature_names_out())
-    temperature = model_bundle.get("temperature", 1.0)
+    temperature = model_bundle["temperature"]
     field_size = len(request.runners)
 
     # build feature matrix
