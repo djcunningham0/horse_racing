@@ -73,6 +73,7 @@ def _uniform_log_loss(df: pl.DataFrame) -> float:
 ROI_RULES: list[dict] = [
     {"rule": "top_model_per_race"},
     {"rule": "favorite"},
+    {"rule": "ml_favorite"},
     {"rule": "top_speed_fig"},
     {"rule": "top_ev_per_race", "ev_threshold": 0.0},
     {"rule": "ev_threshold", "ev_threshold": 0.10},

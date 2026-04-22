@@ -14,6 +14,7 @@ BET_RULES = (
     "top_ev_per_race",
     "top_model_per_race",
     "favorite",
+    "ml_favorite",
     "top_speed_fig",
 )
 
@@ -54,6 +55,8 @@ def apply_bet_rule(
         Bet on each race's top-ranked horse by ``model_prob``.
     favorite
         Bet on the market favorite (highest ``market_prob``) every race.
+    ml_favorite
+        Bet on the morning-line favorite (lowest ``morning_line_odds_float``).
     """
     eligible = df.filter(_VALID_ODDS)
 
@@ -75,6 +78,13 @@ def apply_bet_rule(
     elif rule == "favorite":
         bets = (
             eligible.sort("market_prob", descending=True)
+            .group_by("race_id", maintain_order=True)
+            .first()
+        )
+    elif rule == "ml_favorite":
+        bets = (
+            eligible.filter(pl.col("morning_line_odds_float").is_not_null())
+            .sort("morning_line_odds_float")
             .group_by("race_id", maintain_order=True)
             .first()
         )
