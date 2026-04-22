@@ -10,9 +10,10 @@ from pathlib import Path
 import joblib
 import numpy as np
 import polars as pl
+from sklearn.pipeline import Pipeline
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
-from model.features import base_margin_from_market_prob, build_training_df, split_by_race
+from model.features import base_margin_from_market_prob, build_raw_df, split_by_race
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 from model.predict import predict_scores
 
@@ -90,16 +91,22 @@ def _roi_label(cfg: dict) -> str:
 
 def _metrics_for_split(
     split_df: pl.DataFrame,
-    model,
-    features: list[str],
+    pipeline: Pipeline,
     temperature: float = 1.0,
     use_base_margin: bool = False,
 ) -> dict:
-    X = split_df.select(features).to_numpy()
+    split_df = pipeline.named_steps["derive"].transform(split_df)
+    X = pipeline.named_steps["select"].transform(split_df)
+
     # derive base_margin before _market_probs overwrites market_prob with a
     # version computed from final dollar_odds
     base_margin = base_margin_from_market_prob(split_df) if use_base_margin else None
-    scores = predict_scores(model, X, base_margin=base_margin)
+    scores = predict_scores(
+        model=pipeline.named_steps["model"],
+        X=X,
+        base_margin=base_margin,
+    )
+
     split_df = split_df.with_columns(pl.Series("model_score", scores))
     split_df = _per_race_softmax(
         split_df,
@@ -186,8 +193,7 @@ def _print_roi_table(metrics: dict[str, dict]):
 
 
 def evaluate_splits(
-    model,
-    features: list[str],
+    pipeline: Pipeline,
     train_df: pl.DataFrame,
     val_df: pl.DataFrame,
     test_df: pl.DataFrame,
@@ -196,33 +202,25 @@ def evaluate_splits(
 ) -> dict[str, dict]:
     """Compute metrics on all three splits. Returns dict keyed by split name."""
     return {
-        "train": _metrics_for_split(
-            train_df, model, features, temperature, use_base_margin
-        ),
-        "val": _metrics_for_split(
-            val_df, model, features, temperature, use_base_margin
-        ),
-        "test": _metrics_for_split(
-            test_df, model, features, temperature, use_base_margin
-        ),
+        "train": _metrics_for_split(train_df, pipeline, temperature, use_base_margin),
+        "val": _metrics_for_split(val_df, pipeline, temperature, use_base_margin),
+        "test": _metrics_for_split(test_df, pipeline, temperature, use_base_margin),
     }
 
 
 def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
     """Load model from disk and evaluate. Convenience entrypoint."""
     bundle = joblib.load(model_dir / MODEL_FILENAME)
-    model = bundle["model"]
-    features = bundle["features"]
+    pipeline = bundle["pipeline"]
     temperature = bundle.get("temperature", 1.0)
     use_base_margin = bundle.get("use_base_margin", False)
     logger.info(f"using temperature T={temperature:.4f}")
 
-    df = build_training_df()
+    df = build_raw_df()
     train_df, val_df, test_df = split_by_race(df)
 
     metrics = evaluate_splits(
-        model=model,
-        features=features,
+        pipeline=pipeline,
         train_df=train_df,
         val_df=val_df,
         test_df=test_df,

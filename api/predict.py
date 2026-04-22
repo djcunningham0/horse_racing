@@ -6,7 +6,6 @@ import joblib
 import numpy as np
 
 from model.calibration import apply_temperature
-from model.features import DEFAULT_FEATURE_COLS
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 from api.schemas import RaceRequest, RunnerPrediction
@@ -16,7 +15,7 @@ def load_model(
     model_dir: Path | str = DEFAULT_MODEL_DIR,
     model_filename: Path | str = MODEL_FILENAME,
 ) -> dict:
-    """Load the serialized model bundle (model + feature list)."""
+    """Load the serialized model bundle (pipeline + calibration metadata)."""
     if isinstance(model_dir, str):
         model_dir = Path(model_dir)
 
@@ -25,7 +24,9 @@ def load_model(
 
 def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPrediction]:
     """Score all runners in a race and return predictions sorted by EV."""
-    model = model_bundle["model"]
+    pipeline = model_bundle["pipeline"]
+    model = pipeline.named_steps["model"]
+    feature_names = list(pipeline.named_steps["select"].get_feature_names_out())
     temperature = model_bundle.get("temperature", 1.0)
     field_size = len(request.runners)
 
@@ -56,7 +57,7 @@ def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPredict
         }
 
         # ensure columns the necessary columns are present and in the right order
-        rows.append([row[col] for col in DEFAULT_FEATURE_COLS])
+        rows.append([row[col] for col in feature_names])
 
     X = np.array(rows, dtype=np.float32)
     scores = model.predict(X)

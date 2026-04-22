@@ -20,7 +20,8 @@ from xgboost import plot_importance
 
 from model.calibration import fit_temperature
 from model.evaluate import print_metrics_table, evaluate_splits
-from model.features import DEFAULT_FEATURE_COLS, build_training_df, split_by_race
+from model.feature_pipeline import FEATURE_NAMES
+from model.features import build_training_df, split_by_race
 from model.paths import DEFAULT_MODEL_DIR
 from model.train import DEFAULT_HYPERPARAMS, prepare_df, train
 
@@ -92,7 +93,7 @@ def run_experiment(
     use_final_as_live: bool = False,
 ) -> str:
     """Train, evaluate, and log an experiment to MLflow. Returns the MLflow run ID."""
-    features = features or DEFAULT_FEATURE_COLS
+    features = features or FEATURE_NAMES
     params = {**DEFAULT_HYPERPARAMS[model_type], **(hyperparameters or {})}
     split_kwargs = split_kwargs or {}
 

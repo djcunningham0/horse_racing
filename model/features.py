@@ -7,6 +7,7 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
+from model.feature_pipeline import derive_features
 from model.paths import DEFAULT_PROCESSED_DIR
 
 
@@ -31,98 +32,18 @@ DEFAULT_RANDOM_SEED = 0
 # dynamics differ enough to add noise
 EXCLUDED_COURSE_DESCS: list[str] = ["Hurdle", "Downhill turf", "Timber"]
 
-DEFAULT_FEATURE_COLS: list[str] = [
-    # odds
-    "morning_line_odds_float",
-    "ml_odds_rank",
-    "live_odds",
-    "live_odds_rank",
-    "market_prob",
-    # race characteristics
-    "field_size",
-    "distance_yards",
-    "is_dirt",
-    "is_turf",
-    "is_all_weather",
-    "race_class_rating",  # scale: 20-100+
-    "purse",
-    # entry characteristics
-    "post_position",
-    "weight_carried",
-    "entry_class_rating",  # scale: 300-800+
-    "entry_class_rating_minus_field_avg",
-    "entry_class_rating_to_field_avg_ratio",
-    "entry_to_race_class_ratio",
-    # PP speed
-    "speed_fig_L1",
-    "speed_fig_L2",
-    "speed_fig_L3",
-    "avg_speed_fig_L3",
-    "max_speed_fig_L3",
-    "speed_fig_trend",
-    "speed_fig_minus_field_avg_L1",
-    "speed_fig_to_field_avg_ratio_L1",
-    # PP class
-    "class_rating_L1",  # scale: 20-100+
-    "class_rating_L2",
-    "class_rating_L3",
-    "avg_class_rating_L3",
-    "max_class_rating_L3",
-    "class_rating_diff_L1",
-    "class_rating_diff_avg_L3",
-    "class_rating_diff_max_L3",
-    # PP finishes
-    "official_finish_L1",
-    "official_finish_L2",
-    "official_finish_L3",
-    "relative_finish_L1",
-    "relative_finish_L2",
-    "relative_finish_L3",
-    "avg_relative_finish",
-    # PP odds
-    "pp_odds_L1",
-    "pp_odds_L2",
-    "pp_odds_L3",
-    "pp_overperformance_L1",
-    "pp_overperformance_L2",
-    "pp_overperformance_L3",
-    "pp_avg_overperformance_L3",
-    # PP distance
-    "distance_diff_L1",
-    "distance_diff_L2",
-    "distance_diff_L3",
-    # PP surface
-    "surface_switch_L1",
-    # PP prior starts
-    "days_since_last",
-    "num_prior_starts",
-    "is_first_start",
-    # workouts
-    "best_workout_rank_pct",
-    "best_workout_group_size",
-    "last_workout_rank_pct",
-    "last_workout_group_size",
-    "num_workouts",
-    "days_since_last_workout",
-    # career stats
-    "career_starts",
-    "career_win_rate",
-    "career_top3_rate",
-    "career_earnings_per_start",
-    "surface_starts",
-    "surface_win_rate",
-    "surface_top3_rate",
-]
-
-
-def build_training_df(
+def build_raw_df(
     processed_dir: Path | str = DEFAULT_PROCESSED_DIR,
     seed: int | None = None,
     use_morning_line_as_live: bool = False,
     use_final_as_live: bool = False,
 ) -> pl.DataFrame:
     """
-    Assemble one row per horse-in-a-race with features and label.
+    Load and join raw per-race/per-entry/PP/workout data.
+
+    Adds the `won` training label and the simulated `live_odds` column. Does not compute
+    derived model features — that is the job of `derive_features` in the sklearn
+    Pipeline.
 
     Parameters
     ----------
@@ -191,7 +112,7 @@ def build_training_df(
     workout_feats = _workout_features(workouts)
 
     # fmt: off
-    df = (
+    return (
         race_cols
         .join(entry_cols, on=["race_id", "horse_name"], how="inner")
         .filter(pl.col("dollar_odds") > 0)
@@ -205,89 +126,6 @@ def build_training_df(
             (pl.col("official_finish") == 1).cast(pl.Int8).alias("won"),
         )
         .with_columns(
-            # simple encoding (continued)
-            (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
-        )
-        .with_columns(
-            # derive course type from course description and/or surface
-            (
-                # results: use course_desc and surface
-                pl.when(pl.col("course_desc") == "All Weather Track").then(pl.lit("All Weather Track"))
-                .when(pl.col("surface") == "D").then(pl.lit("Dirt"))
-                .when(pl.col("surface") == "T").then(pl.lit("Turf"))
-                .otherwise(None)
-            ).alias("_course_type"),
-            (
-                # PPs: use pp_surface
-                # - T/I/O = turf, D = dirt, E = all-weather
-                # - rare codes (M/C/B/S/V/J/U/N) fall through to null
-                pl.when(pl.col("pp_surface_L1").is_in(["T", "I", "O"])).then(pl.lit("Turf"))
-                .when(pl.col("pp_surface_L1") == "D").then(pl.lit("Dirt"))
-                .when(pl.col("pp_surface_L1") == "E").then(pl.lit("All Weather Track"))
-                .otherwise(None)
-            ).alias("_pp_course_type_L1"),
-        )
-        .with_columns(
-            # derive course type (continued)
-            (pl.col("_course_type") == "All Weather Track").cast(pl.Int8).alias("is_all_weather"),
-            (pl.col("_course_type") == "Dirt").cast(pl.Int8).alias("is_dirt"),
-            (pl.col("_course_type") == "Turf").cast(pl.Int8).alias("is_turf"),
-            (pl.col("_course_type") != pl.col("_pp_course_type_L1")).cast(pl.Int8).alias("surface_switch_L1"),
-        )
-        .with_columns(
-            # simple derivations
-            (pl.col("entry_class_rating") / pl.col("race_class_rating")).alias("entry_to_race_class_ratio"),
-        )
-        .with_columns(
-            ### comparison to previous races/workouts
-            # date
-            (pl.col("race_date") - pl.col("last_pp_date"))
-            .dt.total_days()
-            .alias("days_since_last"),
-            (pl.col("race_date") - pl.col("last_workout_date"))
-            .dt.total_days()
-            .alias("days_since_last_workout"),
-            # distance (yards)
-            (pl.col("distance_yards") - pl.col("distance_yards_L1")).alias("distance_diff_L1"),
-            (pl.col("distance_yards") - pl.col("distance_yards_L2")).alias("distance_diff_L2"),
-            (pl.col("distance_yards") - pl.col("distance_yards_L3")).alias("distance_diff_L3"),
-            # race class rating
-            (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
-            (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
-            (pl.col("race_class_rating") - pl.col("max_class_rating_L3")).alias("class_rating_diff_max_L3"),
-        )
-        .with_columns(
-            ### comparison to field (window functions)
-            # entry class rating
-            (
-                pl.col("entry_class_rating") - pl.col("entry_class_rating").mean().over("race_id")
-            ).alias("entry_class_rating_minus_field_avg"),
-            (
-                pl.col("entry_class_rating") / pl.col("entry_class_rating").mean().over("race_id")
-            ).alias("entry_class_rating_to_field_avg_ratio"),
-            # speed
-            (
-                pl.col("speed_fig_L1") - pl.col("speed_fig_L1").mean().over("race_id")
-            ).alias("speed_fig_minus_field_avg_L1"),
-            (
-                pl.col("speed_fig_L1") / pl.col("speed_fig_L1").mean().over("race_id")
-            ).alias("speed_fig_to_field_avg_ratio_L1"),
-        )
-        .with_columns(
-            # career stats
-            (pl.col("career_wins") / pl.col("career_starts")).alias("career_win_rate"),
-            (
-                (pl.col("career_wins") + pl.col("career_seconds") + pl.col("career_thirds"))
-                / pl.col("career_starts")
-            ).alias("career_top3_rate"),
-            (pl.col("career_earnings") / pl.col("career_starts")).alias("career_earnings_per_start"),
-            (pl.col("surface_wins") / pl.col("surface_starts")).alias("surface_win_rate"),
-            (
-                (pl.col("surface_wins") + pl.col("surface_seconds") + pl.col("surface_thirds"))
-                / pl.col("surface_starts")
-            ).alias("surface_top3_rate"),
-        )
-        .with_columns(
             # simulate mid-pool live odds from ML + final
             # TODO: at inference, replace with actual live tote odds
             _live_odds_expr(
@@ -296,37 +134,30 @@ def build_training_df(
                 seed=seed,
             ).alias("live_odds"),
         )
-        .with_columns(
-            # odds ordinal rank within field (1 = favorite; ties share the lower rank)
-            pl.col("morning_line_odds_float")
-            .rank(method="min")
-            .over("race_id")
-            .alias("ml_odds_rank"),
-            pl.col("live_odds")
-            .rank(method="min")
-            .over("race_id")
-            .alias("live_odds_rank"),
-        )
-        .with_columns(
-            # implied win probability from live odds, normalized per race
-            # (noisy shares already sum to ~1 by construction, but takeout re-embedding
-            # and numerical floors can perturb the sum; normalize for safety)
-            (1 / (pl.col("live_odds") + 1)).alias("_market_prob_raw"),
-        )
-        .with_columns(
-            (pl.col("_market_prob_raw") / pl.col("_market_prob_raw").sum().over("race_id"))
-            .alias("market_prob"),
-        )
-        .drop(
-            "last_pp_date",
-            "last_workout_date",
-            "_course_type",
-            "_pp_course_type_L1",
-            "_market_prob_raw",
-        )
     )
     # fmt: on
-    return df
+
+
+def build_training_df(
+    processed_dir: Path | str = DEFAULT_PROCESSED_DIR,
+    seed: int | None = None,
+    use_morning_line_as_live: bool = False,
+    use_final_as_live: bool = False,
+) -> pl.DataFrame:
+    """
+    Assemble one row per horse-in-a-race with features and label.
+
+    Convenience wrapper around `build_raw_df` + `derive_features`. Training code paths
+    that go through the sklearn Pipeline should call `build_raw_df` directly and let the
+    Pipeline's `derive` step compute features.
+    """
+    raw = build_raw_df(
+        processed_dir=processed_dir,
+        seed=seed,
+        use_morning_line_as_live=use_morning_line_as_live,
+        use_final_as_live=use_final_as_live,
+    )
+    return derive_features(raw).drop("last_pp_date", "last_workout_date")
 
 
 def _workout_features(workouts: pl.DataFrame) -> pl.DataFrame:
@@ -511,9 +342,9 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
 
 
 def base_margin_from_market_prob(df: pl.DataFrame) -> np.ndarray:
-    """Logit of ``market_prob``, clipped to avoid infinities at the boundaries.
+    """Logit of `market_prob`, clipped to avoid infinities at the boundaries.
 
-    Intended for use as ``base_margin`` at train and inference time, so the
+    Intended for use as `base_margin` at train and inference time, so the
     model learns corrections relative to market-implied probabilities.
     """
     p = df["market_prob"].to_numpy()
@@ -526,7 +357,7 @@ def _live_odds_expr(
     use_final_as_live: bool,
     seed: int | None,
 ) -> pl.Expr:
-    """Build the ``live_odds`` expression for training-df assembly."""
+    """Build the `live_odds` expression for training-df assembly."""
     if use_morning_line_as_live:
         return pl.col("morning_line_odds_float")
     if use_final_as_live:

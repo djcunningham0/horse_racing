@@ -6,15 +6,23 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from model.feature_pipeline import FEATURE_NAMES
+
 
 @pytest.fixture
 def client():
-    """Create a test client with a mocked model."""
+    """Create a test client with a mocked pipeline."""
     mock_model = MagicMock()
     # return arbitrary scores for any input shape
     mock_model.predict = lambda X: np.random.randn(X.shape[0])
 
-    with patch("api.predict.load_model", return_value={"model": mock_model}):
+    mock_select = MagicMock()
+    mock_select.get_feature_names_out = lambda: np.asarray(FEATURE_NAMES, dtype=object)
+
+    mock_pipeline = MagicMock()
+    mock_pipeline.named_steps = {"model": mock_model, "select": mock_select}
+
+    with patch("api.predict.load_model", return_value={"pipeline": mock_pipeline}):
         from api.main import app
 
         with TestClient(app) as c:

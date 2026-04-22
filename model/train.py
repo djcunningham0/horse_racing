@@ -10,13 +10,19 @@ import logging
 import joblib
 import numpy as np
 import polars as pl
+from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier, XGBRanker
 
 from model.calibration import fit_temperature
+from model.feature_pipeline import (
+    FEATURE_NAMES,
+    derive_features,
+    make_column_selector,
+    make_feature_deriver,
+)
 from model.features import (
-    DEFAULT_FEATURE_COLS,
     base_margin_from_market_prob,
-    build_training_df,
+    build_raw_df,
     split_by_race,
 )
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
@@ -57,34 +63,75 @@ DEFAULT_HYPERPARAMS: dict[str, dict] = {
 
 def prepare_df(
     df: pl.DataFrame,
-    features: list[str],
     use_base_margin: bool = False,
 ) -> tuple[pl.DataFrame, np.ndarray, np.ndarray, np.ndarray | None]:
-    """Return (X, y, group_sizes, base_margin) sorted by race_id.
+    """Return (X_raw, y, group_sizes, base_margin) sorted by race_id.
 
-    ``base_margin`` is ``None`` unless ``use_base_margin`` is set, in which
-    case it is ``logit(market_prob)``.
+    Parameters
+    ----------
+    df
+        Raw DataFrame from `build_raw_df`
+    use_base_margin
+        If True, compute `base_margin` as `logit(market_prob)` via `derive_features`;
+        otherwise `base_margin` is `None`
+
+    Returns
+    -------
+    X_raw
+        Sorted raw DataFrame, ready for the sklearn Pipeline
+    y
+        Binary win labels
+    group_sizes
+        Number of horses per race, in race_id order
+    base_margin
+        `logit(market_prob)` if `use_base_margin` else `None`
     """
     df = df.sort("race_id")
-    X = df.select(features)
     y = df["won"].to_numpy()
     group_sizes = df.group_by("race_id", maintain_order=True).len()["len"].to_numpy()
-    base_margin = base_margin_from_market_prob(df) if use_base_margin else None
-    return X, y, group_sizes, base_margin
+    base_margin = (
+        base_margin_from_market_prob(derive_features(df)) if use_base_margin else None
+    )
+    return df, y, group_sizes, base_margin
 
 
 def train(
     train_df: pl.DataFrame,
     val_df: pl.DataFrame,
-    features: list[str] = DEFAULT_FEATURE_COLS,
+    features: list[str] | None = None,
     hyperparameters: dict | None = None,
     use_base_margin: bool = False,
     model_type: str = "ranker",
-) -> XGBRanker | XGBClassifier:
+) -> Pipeline:
+    """Fit a feature + model sklearn Pipeline.
+
+    Parameters
+    ----------
+    train_df, val_df
+        Raw DataFrames from `build_raw_df`.
+    features
+        Feature column names selected after the `derive` step (if None, defaults to
+        `FEATURE_NAMES`)
+    hyperparameters
+        Overrides merged on top of `DEFAULT_HYPERPARAMS[model_type]`
+    use_base_margin
+        If True, pass `logit(market_prob)` as XGBoost `base_margin`
+    model_type
+        Either "ranker" (XGBRanker) or "classifier" (XGBClassifier)
+
+    Returns
+    -------
+    Pipeline
+        Fitted `derive` + `select` + `model` pipeline, ready to apply to future raw
+        DataFrames
+    """
+    if features is None:
+        features = FEATURE_NAMES
+
     params = {**DEFAULT_HYPERPARAMS[model_type], **(hyperparameters or {})}
 
-    X_tr, y_tr, g_tr, m_tr = prepare_df(train_df, features, use_base_margin)
-    X_va, y_va, g_va, m_va = prepare_df(val_df, features, use_base_margin)
+    X_tr, y_tr, g_tr, m_tr = prepare_df(train_df, use_base_margin)
+    X_va, y_va, g_va, m_va = prepare_df(val_df, use_base_margin)
 
     logger.info(
         f"train ({model_type}): {len(y_tr):,} rows / {len(g_tr):,} races | "
@@ -92,31 +139,39 @@ def train(
     )
 
     if model_type == "ranker":
-        model = XGBRanker(**params)
-        model.fit(
-            X_tr,
-            y_tr,
-            group=g_tr,
-            base_margin=m_tr,
-            eval_set=[(X_va, y_va)],
-            eval_group=[g_va],
-            base_margin_eval_set=[m_va] if use_base_margin else None,
-            verbose=50,
-        )
+        estimator = XGBRanker(**params)
     elif model_type == "classifier":
-        model = XGBClassifier(**params)
-        model.fit(
-            X_tr,
-            y_tr,
-            base_margin=m_tr,
-            eval_set=[(X_va, y_va)],
-            base_margin_eval_set=[m_va] if use_base_margin else None,
-            verbose=50,
-        )
+        estimator = XGBClassifier(**params)
     else:
         raise ValueError(f"unknown model_type: {model_type!r}")
 
-    return model
+    pipeline = Pipeline([
+        ("derive", make_feature_deriver()),
+        ("select", make_column_selector(features)),
+        ("model", estimator),
+    ])
+
+    # Fit feature steps on train, transform val — xgboost needs a pre-transformed
+    # eval_set since sklearn Pipelines don't auto-transform fit kwargs.
+    feature_pipeline = Pipeline(pipeline.steps[:-1])
+    X_tr_numpy = feature_pipeline.fit_transform(X_tr)
+    X_va_numpy = feature_pipeline.transform(X_va)
+
+    fit_kwargs = {
+        "base_margin": m_tr,
+        "eval_set": [(X_va_numpy, y_va)],
+        "base_margin_eval_set": [m_va] if use_base_margin else None,
+        "verbose": 50,
+    }
+    if model_type == "ranker":
+        fit_kwargs["group"] = g_tr
+        fit_kwargs["eval_group"] = [g_va]
+
+    # earlier pipeline steps (`feature_pipeline`) were already fit, so just need to fit
+    # the estimator here
+    estimator.fit(X_tr_numpy, y_tr, **fit_kwargs)
+
+    return pipeline
 
 
 def main():
@@ -155,12 +210,12 @@ def main():
     )
     args = parser.parse_args()
 
-    df = build_training_df(
+    df = build_raw_df(
         use_morning_line_as_live=args.use_morning_line_as_live,
         use_final_as_live=args.use_final_as_live,
     )
     train_df, val_df, _ = split_by_race(df)
-    model = train(
+    pipeline = train(
         train_df,
         val_df,
         use_base_margin=args.use_base_margin,
@@ -169,7 +224,7 @@ def main():
 
     if args.temperature is None:
         temperature = fit_temperature(
-            model, val_df, DEFAULT_FEATURE_COLS, use_base_margin=args.use_base_margin
+            pipeline, val_df, use_base_margin=args.use_base_margin
         )
         logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
     else:
@@ -180,8 +235,7 @@ def main():
     out_path = DEFAULT_MODEL_DIR / MODEL_FILENAME
     joblib.dump(
         {
-            "model": model,
-            "features": DEFAULT_FEATURE_COLS,
+            "pipeline": pipeline,
             "temperature": temperature,
             "use_base_margin": args.use_base_margin,
             "model_type": args.model_type,

@@ -16,27 +16,33 @@ def race_df() -> pl.DataFrame:
 
 
 def test_prepare_df_sorts_by_race_id(race_df: pl.DataFrame):
-    X, _, _, _ = prepare_df(race_df, ["feat1", "feat2"])
+    X, _, _, _ = prepare_df(race_df)
 
     # all A rows come before B rows
     assert X["feat1"].to_list()[:3] == [20.0, 30.0, 50.0]  # A rows
     assert X["feat1"].to_list()[3:] == [10.0, 40.0]  # B rows
 
 
-def test_prepare_df_selects_features(race_df: pl.DataFrame):
-    X, _, _, _ = prepare_df(race_df, ["feat1"])
-    assert X.columns == ["feat1"]
+def test_prepare_df_returns_raw_df(race_df: pl.DataFrame):
+    X, _, _, _ = prepare_df(race_df)
+    # no feature selection happens here — all original columns are preserved
+    assert set(X.columns) == {"race_id", "won", "feat1", "feat2"}
 
 
 def test_prepare_df_y_matches_sorted_order(race_df: pl.DataFrame):
-    _, y, _, _ = prepare_df(race_df, ["feat1"])
+    _, y, _, _ = prepare_df(race_df)
 
     # after sorting: A(1,0,0), B(0,1)
     assert y.tolist() == [1, 0, 0, 0, 1]
 
 
 def test_prepare_df_group_sizes(race_df: pl.DataFrame):
-    _, _, group_sizes, _ = prepare_df(race_df, ["feat1", "feat2"])
+    _, _, group_sizes, _ = prepare_df(race_df)
 
     assert group_sizes.tolist() == [3, 2]  # 3 A rows, 2 B rows
     assert group_sizes.sum() == len(race_df)
+
+
+def test_prepare_df_base_margin_none_by_default(race_df: pl.DataFrame):
+    _, _, _, base_margin = prepare_df(race_df)
+    assert base_margin is None
