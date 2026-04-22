@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, Request
 from starlette.status import HTTP_201_CREATED
 
+from api.persistence import save_races
 from api.predict import predict_race
 from api.schemas import (
     CreateRaceRequest,
@@ -25,6 +26,10 @@ def _get_race(request: Request, race_id: str) -> StoredRace:
         return races[race_id]
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Race '{race_id}' not found")
+
+
+def _persist(request: Request):
+    save_races(request.app.state.races_path, request.app.state.races)
 
 
 def _find_runner(race: StoredRace, post_position: int) -> StoredRunner:
@@ -65,6 +70,7 @@ def create_race(body: CreateRaceRequest, request: Request) -> CreateRaceResponse
         runners=runners,
     )
     request.app.state.races[race_id] = race
+    _persist(request)
     return CreateRaceResponse(race_id=race_id)
 
 
@@ -104,6 +110,7 @@ def update_odds(race_id: str, body: OddsUpdate, request: Request) -> StoredRace:
             )
         runner.live_odds = entry.live_odds
 
+    _persist(request)
     return race
 
 
@@ -123,6 +130,7 @@ def scratch_runner(race_id: str, post_position: int, request: Request) -> Stored
         )
 
     runner.scratched = True
+    _persist(request)
     return race
 
 
@@ -138,6 +146,7 @@ def unscratch_runner(race_id: str, post_position: int, request: Request) -> Stor
         )
 
     runner.scratched = False
+    _persist(request)
     return race
 
 

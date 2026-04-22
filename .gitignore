@@ -26,6 +26,7 @@ Thumbs.db
 data/raw/*
 data/processed/*
 model/artifacts/*
+state/
 !**/.gitkeep
 
 # MLflow

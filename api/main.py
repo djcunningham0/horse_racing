@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from api.persistence import get_store_path, load_races
 from api.predict import load_model, predict_race
 from api.races import router as races_router
 from api.schemas import PredictionResponse, RaceRequest
@@ -14,7 +15,8 @@ from api.schemas import PredictionResponse, RaceRequest
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.model_bundle = load_model()
-    app.state.races = {}
+    app.state.races_path = get_store_path()
+    app.state.races = load_races(app.state.races_path)
     yield
 
 

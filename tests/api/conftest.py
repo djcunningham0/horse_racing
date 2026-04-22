@@ -37,8 +37,9 @@ def _fake_predict_from_raw(raw_df: pl.DataFrame, bundle: dict) -> pl.DataFrame:
 
 
 @pytest.fixture
-def client():
+def client(tmp_path, monkeypatch):
     """Create a test client with predict_from_raw mocked at the API boundary."""
+    monkeypatch.setenv("RACES_STORE_PATH", str(tmp_path / "races.json"))
     with (
         patch("api.predict.load_model", return_value={"pipeline": None}),
         patch("api.predict.predict_from_raw", side_effect=_fake_predict_from_raw),
