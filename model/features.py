@@ -118,8 +118,29 @@ DEFAULT_FEATURE_COLS: list[str] = [
 def build_training_df(
     processed_dir: Path | str = DEFAULT_PROCESSED_DIR,
     seed: int | None = None,
+    use_morning_line_as_live: bool = False,
+    use_final_as_live: bool = False,
 ) -> pl.DataFrame:
-    """Assemble one row per horse-in-a-race with features and label."""
+    """
+    Assemble one row per horse-in-a-race with features and label.
+
+    Parameters
+    ----------
+    processed_dir
+        Directory with processed data
+    seed
+        Random seed for noisy odds
+    use_morning_line_as_live
+        Override the noisy live odds simulator to use the morning line odds (no-leakage
+        baseline)
+    use_final_as_live
+        Override the noisy live odds simulator to use the final odds (leaky, perfect-
+        information upper bound)
+    """
+    if use_morning_line_as_live and use_final_as_live:
+        raise ValueError(
+            "use_morning_line_as_live and use_final_as_live are mutually exclusive"
+        )
     if isinstance(processed_dir, str):
         processed_dir = Path(processed_dir)
 
@@ -269,10 +290,9 @@ def build_training_df(
         .with_columns(
             # simulate mid-pool live odds from ML + final
             # TODO: at inference, replace with actual live tote odds
-            _noisy_live_odds(
-                pl.col("dollar_odds"),
-                pl.col("morning_line_odds_float"),
-                pl.col("race_id"),
+            _live_odds_expr(
+                use_morning_line_as_live=use_morning_line_as_live,
+                use_final_as_live=use_final_as_live,
                 seed=seed,
             ).alias("live_odds"),
         )
@@ -499,6 +519,24 @@ def base_margin_from_market_prob(df: pl.DataFrame) -> np.ndarray:
     p = df["market_prob"].to_numpy()
     p = np.clip(p, 1e-4, 1.0 - 1e-4)
     return np.log(p / (1.0 - p))
+
+
+def _live_odds_expr(
+    use_morning_line_as_live: bool,
+    use_final_as_live: bool,
+    seed: int | None,
+) -> pl.Expr:
+    """Build the ``live_odds`` expression for training-df assembly."""
+    if use_morning_line_as_live:
+        return pl.col("morning_line_odds_float")
+    if use_final_as_live:
+        return pl.col("dollar_odds")
+    return _noisy_live_odds(
+        pl.col("dollar_odds"),
+        pl.col("morning_line_odds_float"),
+        pl.col("race_id"),
+        seed=seed,
+    )
 
 
 def _noisy_live_odds(

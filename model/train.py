@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_RANKER_HYPERPARAMS = {
     "objective": "rank:ndcg",
     "tree_method": "hist",
-    "n_estimators": 800,
+    "n_estimators": 1000,
     "learning_rate": 0.01,
     "max_depth": 4,
     "subsample": 0.8,
@@ -39,7 +39,7 @@ DEFAULT_RANKER_HYPERPARAMS = {
 DEFAULT_CLASSIFIER_HYPERPARAMS = {
     "objective": "binary:logistic",
     "tree_method": "hist",
-    "n_estimators": 800,
+    "n_estimators": 2000,
     "learning_rate": 0.01,
     "max_depth": 4,
     "subsample": 0.8,
@@ -136,9 +136,29 @@ def main():
         action="store_true",
         help="Use logit(market_prob) as XGBoost base_margin",
     )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Fixed softmax temperature. If unset, fit on the validation set.",
+    )
+    live_odds = parser.add_mutually_exclusive_group()
+    live_odds.add_argument(
+        "--use-morning-line-as-live",
+        action="store_true",
+        help="Set live_odds = morning line (no simulator, no leakage). For experimentation.",
+    )
+    live_odds.add_argument(
+        "--use-final-as-live",
+        action="store_true",
+        help="Set live_odds = final public odds. Leaks future info; upper-bound only.",
+    )
     args = parser.parse_args()
 
-    df = build_training_df()
+    df = build_training_df(
+        use_morning_line_as_live=args.use_morning_line_as_live,
+        use_final_as_live=args.use_final_as_live,
+    )
     train_df, val_df, _ = split_by_race(df)
     model = train(
         train_df,
@@ -147,10 +167,14 @@ def main():
         model_type=args.model_type,
     )
 
-    temperature = fit_temperature(
-        model, val_df, DEFAULT_FEATURE_COLS, use_base_margin=args.use_base_margin
-    )
-    logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
+    if args.temperature is None:
+        temperature = fit_temperature(
+            model, val_df, DEFAULT_FEATURE_COLS, use_base_margin=args.use_base_margin
+        )
+        logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
+    else:
+        temperature = args.temperature
+        logger.info(f"using fixed softmax temperature: T={temperature:.4f}")
 
     DEFAULT_MODEL_DIR.mkdir(parents=True, exist_ok=True)
     out_path = DEFAULT_MODEL_DIR / MODEL_FILENAME

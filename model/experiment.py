@@ -48,6 +48,23 @@ def main():
         default="ranker",
         help="XGBoost model type",
     )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=None,
+        help="Fixed softmax temperature. If unset, fit on the validation set.",
+    )
+    live_odds = parser.add_mutually_exclusive_group()
+    live_odds.add_argument(
+        "--use-morning-line-as-live",
+        action="store_true",
+        help="Set live_odds = morning line (no simulator, no leakage). For experimentation.",
+    )
+    live_odds.add_argument(
+        "--use-final-as-live",
+        action="store_true",
+        help="Set live_odds = final public odds. Leaks future info; upper-bound only.",
+    )
     args = parser.parse_args()
 
     run_id = run_experiment(
@@ -55,6 +72,9 @@ def main():
         description=args.description,
         use_base_margin=args.use_base_margin,
         model_type=args.model_type,
+        temperature=args.temperature,
+        use_morning_line_as_live=args.use_morning_line_as_live,
+        use_final_as_live=args.use_final_as_live,
     )
     logging.info(f"finished run ID: {run_id}")
 
@@ -67,6 +87,9 @@ def run_experiment(
     split_kwargs: dict | None = None,
     use_base_margin: bool = False,
     model_type: str = "ranker",
+    temperature: float | None = None,
+    use_morning_line_as_live: bool = False,
+    use_final_as_live: bool = False,
 ) -> str:
     """Train, evaluate, and log an experiment to MLflow. Returns the MLflow run ID."""
     features = features or DEFAULT_FEATURE_COLS
@@ -87,11 +110,16 @@ def run_experiment(
         mlflow.log_param("features", ", ".join(features))
         mlflow.log_param("use_base_margin", use_base_margin)
         mlflow.log_param("model_type", model_type)
+        mlflow.log_param("use_morning_line_as_live", use_morning_line_as_live)
+        mlflow.log_param("use_final_as_live", use_final_as_live)
         for k, v in split_kwargs.items():
             mlflow.log_param(f"split.{k}", v)
 
         # build data and split
-        df = build_training_df()
+        df = build_training_df(
+            use_morning_line_as_live=use_morning_line_as_live,
+            use_final_as_live=use_final_as_live,
+        )
         train_df, val_df, test_df = split_by_race(df, **split_kwargs)
 
         # train
@@ -104,12 +132,17 @@ def run_experiment(
             model_type=model_type,
         )
 
-        # fit softmax temperature on val
-        temperature = fit_temperature(
-            model, val_df, features, use_base_margin=use_base_margin
-        )
-        logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
+        # softmax temperature: fixed if provided, else fit on val
+        fit_temp = temperature is None
+        if fit_temp:
+            temperature = fit_temperature(
+                model, val_df, features, use_base_margin=use_base_margin
+            )
+            logger.info(f"fit softmax temperature on val: T={temperature:.4f}")
+        else:
+            logger.info(f"using fixed softmax temperature: T={temperature:.4f}")
         mlflow.log_metric("temperature", temperature)
+        mlflow.log_param("temperature_fitted", fit_temp)
 
         # evaluate
         metrics = evaluate_splits(
