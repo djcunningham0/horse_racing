@@ -12,7 +12,7 @@ def _parse_point_of_calls(entry: ET.Element) -> dict:
     result = {}
     for poc in entry.findall("POINT_OF_CALL"):
         which = poc.get("WHICH", "")
-        key = f"final" if which == "FINAL" else which
+        key = "final" if which == "FINAL" else which
         result[f"point_of_call_{key}_position"] = safe_int(xml_text(poc, "POSITION"))
         result[f"point_of_call_{key}_lengths"] = xml_text(poc, "LENGTHS")
     return result
