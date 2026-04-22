@@ -3,9 +3,11 @@
 from pathlib import Path
 
 import joblib
-import numpy as np
+import polars as pl
 
-from model.calibration import apply_temperature
+from model.betting import add_ev_columns
+from model.features import derive_pp_rollup_features
+from model.inference import predict_from_raw
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 from api.schemas import RaceRequest, RunnerPrediction
@@ -24,72 +26,43 @@ def load_model(
 
 def predict_race(request: RaceRequest, model_bundle: dict) -> list[RunnerPrediction]:
     """Score all runners in a race and return predictions sorted by EV."""
-    pipeline = model_bundle["pipeline"]
-    model = pipeline.named_steps["model"]
-    feature_names = list(pipeline.named_steps["select"].get_feature_names_out())
-    temperature = model_bundle["temperature"]
-    field_size = len(request.runners)
+    raw_df = derive_pp_rollup_features(_build_raw_df(request))
+    scored = predict_from_raw(raw_df, model_bundle)
+    scored = add_ev_columns(scored, dollar_odds_col="live_odds")
 
-    # build feature matrix
+    return [
+        RunnerPrediction(
+            horse_name=row["horse_name"],
+            post_position=row["post_position"],
+            model_prob=round(row["model_prob"], 4),
+            market_prob=round(row["market_prob"], 4),
+            edge=round(row["model_prob"] - row["market_prob"], 4),
+            ev_per_dollar=round(row["ev_per_dollar"], 4),
+        )
+        for row in scored.sort("ev_per_dollar", descending=True).iter_rows(named=True)
+    ]
+
+
+def _build_raw_df(request: RaceRequest) -> pl.DataFrame:
+    """
+    Assemble a raw DataFrame matching the columns produced by `build_raw_df` +
+    `aggregate_pp_features`. Client-supplied rollups are used directly; per-race and
+    derived PP features are layered on downstream.
+    """
+    race_id = request.race_id or f"api-{request.race_date.isoformat()}"
+    field_size = len(request.runners)
     rows = []
     for r in request.runners:
-        figs = [r.speed_fig_last1, r.speed_fig_last2, r.speed_fig_last3]
-        valid_figs = [f for f in figs if f is not None]
-        avg_speed = float(np.mean(valid_figs)) if valid_figs else np.nan
-
-        row = {
-            "morning_line_odds_float": r.morning_line_odds,
-            "post_position": r.post_position,
-            "weight_carried": r.weight_carried,
-            "field_size": field_size,
-            "distance": request.distance,
-            "is_dirt": int(request.surface == "D"),
-            "is_turf": int(request.surface == "T"),
-            "is_all_weather": 0,  # TODO: fine for Churchill Downs (no AWT), but generalize in the future  # fmt: skip
-            "class_rating": r.class_rating,
-            "speed_fig_L1": _nan_if_none(r.speed_fig_last1),
-            "speed_fig_L2": _nan_if_none(r.speed_fig_last2),
-            "speed_fig_L3": _nan_if_none(r.speed_fig_last3),
-            "avg_speed_fig_L3": avg_speed,
-            "days_since_last": _nan_if_none(r.days_since_last),
-            "num_prior_starts": r.num_prior_starts,
-            "is_first_start": int(r.num_prior_starts == 0),
-        }
-
-        # ensure columns the necessary columns are present and in the right order
-        rows.append([row[col] for col in feature_names])
-
-    X = np.array(rows, dtype=np.float32)
-    scores = model.predict(X)
-    probs = apply_temperature(scores, temperature)
-
-    # calculate market probabilities from tote odds, then normalize
-    raw_market = np.array([1.0 / (r.tote_odds + 1.0) for r in request.runners])
-    market_total = raw_market.sum()
-    market_probs = raw_market / market_total if market_total > 0 else raw_market
-
-    # build predictions
-    predictions = []
-    for i, runner in enumerate(request.runners):
-        model_prob = float(probs[i])
-        market_prob = float(market_probs[i])
-        decimal_odds = runner.tote_odds + 1.0
-        ev = model_prob * decimal_odds - 1.0
-
-        predictions.append(
-            RunnerPrediction(
-                horse_name=runner.horse_name,
-                post_position=runner.post_position,
-                model_prob=round(model_prob, 4),
-                market_prob=round(market_prob, 4),
-                edge=round(model_prob - market_prob, 4),
-                ev_per_dollar=round(ev, 4),
-            )
-        )
-
-    predictions.sort(key=lambda p: p.ev_per_dollar, reverse=True)
-    return predictions
-
-
-def _nan_if_none(val: float | None) -> float:
-    return val if val is not None else np.nan
+        # rename runner fields as needed, then add race-level fields
+        row = r.model_dump()
+        row["morning_line_odds_float"] = row.pop("morning_line_odds")  # rename
+        row["race_id"] = race_id
+        row["race_date"] = request.race_date
+        row["distance_yards"] = request.distance_yards
+        row["surface"] = request.surface
+        row["course_desc"] = request.course_desc
+        row["race_class_rating"] = request.race_class_rating
+        row["purse"] = request.purse
+        row["field_size"] = field_size
+        rows.append(row)
+    return pl.DataFrame(rows)

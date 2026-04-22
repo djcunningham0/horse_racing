@@ -28,7 +28,7 @@
         <div>
           <div class="race-card-title" x-text="'R' + race.race_number"></div>
           <div class="race-card-meta">
-            <span x-text="race.distance + 'f'"></span>
+            <span x-text="(race.distance_yards / 220).toFixed(1) + 'f'"></span>
             &middot;
             <span x-text="surfaceLabel(race.surface)"></span>
           </div>
@@ -45,7 +45,7 @@
     <h2>
       <span x-text="'Race ' + currentRace?.race_number"></span>
       <span style="font-weight: 400; font-size: 16px; color: var(--text-secondary);"
-            x-text="currentRace ? currentRace.distance + 'f ' + surfaceLabel(currentRace.surface) : ''">
+            x-text="currentRace ? (currentRace.distance_yards / 220).toFixed(1) + 'f ' + surfaceLabel(currentRace.surface) : ''">
       </span>
     </h2>
 
@@ -56,8 +56,8 @@
           <div class="runner-name" x-text="runner.horse_name"></div>
           <div class="runner-info">
             ML <span x-text="fmtOdds(runner.morning_line_odds)"></span>-1
-            <template x-if="runner.speed_fig_last1 != null">
-              <span>&middot; SPD <span x-text="runner.speed_fig_last1"></span></span>
+            <template x-if="runner.speed_fig_L1 != null">
+              <span>&middot; SPD <span x-text="runner.speed_fig_L1"></span></span>
             </template>
           </div>
         </div>
@@ -66,7 +66,7 @@
                inputmode="decimal"
                step="any"
                min="0.1"
-               x-model.number="runner.tote_odds"
+               x-model.number="runner.live_odds"
                :disabled="runner.scratched"
                placeholder="odds">
         <button class="scratch-btn"

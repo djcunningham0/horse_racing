@@ -47,15 +47,19 @@ def create_race(body: CreateRaceRequest, request: Request) -> CreateRaceResponse
         raise HTTPException(status_code=409, detail=f"Race '{race_id}' already exists")
 
     runners = [
-        StoredRunner(**r.model_dump(), tote_odds=r.morning_line_odds)
+        StoredRunner(**r.model_dump(), live_odds=r.morning_line_odds)
         for r in body.runners
     ]
     race = StoredRace(
         race_id=race_id,
         track=body.track,
         race_number=body.race_number,
-        distance=body.distance,
+        race_date=body.race_date,
+        distance_yards=body.distance_yards,
         surface=body.surface,
+        course_desc=body.course_desc,
+        race_class_rating=body.race_class_rating,
+        purse=body.purse,
         runners=runners,
     )
     request.app.state.races[race_id] = race
@@ -70,7 +74,8 @@ def list_races(request: Request) -> list[RaceSummary]:
             race_id=race.race_id,
             track=race.track,
             race_number=race.race_number,
-            distance=race.distance,
+            race_date=race.race_date,
+            distance_yards=race.distance_yards,
             surface=race.surface,
             num_runners=len(_active_runners(race)),
         )
@@ -95,7 +100,7 @@ def update_odds(race_id: str, body: OddsUpdate, request: Request) -> StoredRace:
                 status_code=422,
                 detail=f"No runner at post position {entry.post_position}",
             )
-        runner.tote_odds = entry.tote_odds
+        runner.live_odds = entry.live_odds
 
     return race
 
@@ -139,18 +144,22 @@ def predict_stored_race(race_id: str, request: Request) -> PredictionResponse:
     race = _get_race(request, race_id)
 
     active = _active_runners(race)
-    missing = [r.post_position for r in active if r.tote_odds is None]
+    missing = [r.post_position for r in active if r.live_odds is None]
     if missing:
         raise HTTPException(
             status_code=422,
-            detail=f"Tote odds not set for post positions: {missing}",
+            detail=f"Live odds not set for post positions: {missing}",
         )
 
     runner_inputs = [RunnerInput(**r.model_dump()) for r in active]
     race_request = RaceRequest(
         race_id=race.race_id,
-        distance=race.distance,
+        race_date=race.race_date,
+        distance_yards=race.distance_yards,
         surface=race.surface,
+        course_desc=race.course_desc,
+        race_class_rating=race.race_class_rating,
+        purse=race.purse,
         runners=runner_inputs,
     )
     predictions = predict_race(race_request, request.app.state.model_bundle)

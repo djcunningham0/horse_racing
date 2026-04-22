@@ -125,7 +125,7 @@ function horseApp() {
     async submitOdds() {
       this.clearError();
       const active = this.currentRace.runners.filter((r) => !r.scratched);
-      if (active.some((r) => !r.tote_odds || r.tote_odds <= 0)) {
+      if (active.some((r) => !r.live_odds || r.live_odds <= 0)) {
         this.error = "Enter valid odds for all active runners.";
         return;
       }
@@ -133,7 +133,7 @@ function horseApp() {
       try {
         const odds = active.map((r) => ({
           post_position: r.post_position,
-          tote_odds: r.tote_odds,
+          live_odds: r.live_odds,
         }));
         await updateOdds(this.currentRace.race_id, odds);
         this.predictions = await getPredictions(this.currentRace.race_id);

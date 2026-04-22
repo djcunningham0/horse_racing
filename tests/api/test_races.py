@@ -9,12 +9,12 @@ class TestCreateRace:
         assert r.status_code == 201
         assert r.json()["race_id"] == "CD-R1"
 
-    def test_tote_odds_default_to_morning_line(self, client):
+    def test_live_odds_default_to_morning_line(self, client):
         _ = client.post("/races", json=sample_race_body())
         r = client.get("/races/CD-R1")
         race = r.json()
         for runner in race["runners"]:
-            assert runner["tote_odds"] == runner["morning_line_odds"]
+            assert runner["live_odds"] == runner["morning_line_odds"]
 
     def test_duplicate_race(self, client):
         client.post("/races", json=sample_race_body())
@@ -53,35 +53,35 @@ class TestUpdateOdds:
         client.post("/races", json=sample_race_body())
         r = client.patch(
             "/races/CD-R1/odds",
-            json={"odds": [{"post_position": 1, "tote_odds": 3.5}]},
+            json={"odds": [{"post_position": 1, "live_odds": 3.5}]},
         )
         assert r.status_code == 200
         runners = {x["post_position"]: x for x in r.json()["runners"]}
-        assert runners[1]["tote_odds"] == 3.5
+        assert runners[1]["live_odds"] == 3.5
         # runner 2 still has morning line default
-        assert runners[2]["tote_odds"] == 7.0
+        assert runners[2]["live_odds"] == 7.0
 
     def test_update_all_odds(self, client):
         client.post("/races", json=sample_race_body())
-        odds = [{"post_position": i, "tote_odds": 2.0 + i} for i in range(1, 4)]
+        odds = [{"post_position": i, "live_odds": 2.0 + i} for i in range(1, 4)]
         r = client.patch("/races/CD-R1/odds", json={"odds": odds})
         assert r.status_code == 200
         runners = {x["post_position"]: x for x in r.json()["runners"]}
         for i in range(1, 4):
-            assert runners[i]["tote_odds"] == 2.0 + i
+            assert runners[i]["live_odds"] == 2.0 + i
 
     def test_update_odds_bad_post(self, client):
         client.post("/races", json=sample_race_body())
         r = client.patch(
             "/races/CD-R1/odds",
-            json={"odds": [{"post_position": 99, "tote_odds": 5.0}]},
+            json={"odds": [{"post_position": 99, "live_odds": 5.0}]},
         )
         assert r.status_code == 422
 
     def test_update_odds_race_not_found(self, client):
         r = client.patch(
             "/races/INVALID-R1/odds",
-            json={"odds": [{"post_position": 1, "tote_odds": 5.0}]},
+            json={"odds": [{"post_position": 1, "live_odds": 5.0}]},
         )
         assert r.status_code == 404
 
@@ -144,7 +144,7 @@ class TestUnscratchRunner:
 class TestPredictStoredRace:
     def _create_race_with_odds(self, client):
         client.post("/races", json=sample_race_body())
-        odds = [{"post_position": i, "tote_odds": 2.0 + i} for i in range(1, 4)]
+        odds = [{"post_position": i, "live_odds": 2.0 + i} for i in range(1, 4)]
         client.patch("/races/CD-R1/odds", json={"odds": odds})
 
     def test_predict_with_odds(self, client):
