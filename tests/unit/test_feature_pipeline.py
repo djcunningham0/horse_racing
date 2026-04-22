@@ -119,9 +119,7 @@ def test_derive_features_known_values(raw_df: pl.DataFrame):
     assert out["is_turf"].to_list() == [0, 0, 0, 1, 1]
     assert out["is_all_weather"].to_list() == [0, 0, 0, 0, 0]
 
-    # is_first_start: horse B has num_prior_starts == 0
     # sorted order: A, B, C, D, E
-    assert out["is_first_start"].to_list() == [0, 1, 0, 0, 0]
 
     # entry_to_race_class_ratio: horse A = 700 / 80 = 8.75
     np.testing.assert_allclose(out["entry_to_race_class_ratio"][0], 700 / 80)

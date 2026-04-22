@@ -78,7 +78,6 @@ FEATURE_NAMES: list[str] = [
     # PP prior starts
     "days_since_last",
     "num_prior_starts",
-    "is_first_start",
     # workouts
     "best_workout_rank_pct",
     "best_workout_group_size",
@@ -128,7 +127,6 @@ def derive_features(df: pl.DataFrame) -> pl.DataFrame:
                 .when(pl.col("pp_surface_L1") == "E").then(pl.lit("All Weather Track"))
                 .otherwise(None)
             ).alias("_pp_course_type_L1"),
-            (pl.col("num_prior_starts") == 0).cast(pl.Int8).alias("is_first_start"),
         )
         .with_columns(
             # course type (continued)
