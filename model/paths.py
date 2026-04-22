@@ -7,4 +7,4 @@ DEFAULT_PROCESSED_DIR = Path("data/processed")
 
 # model
 DEFAULT_MODEL_DIR = Path("model/artifacts")
-MODEL_FILENAME = "xgb_ranker_v1.joblib"
+MODEL_FILENAME = "xgb_pipeline_v1.joblib"
