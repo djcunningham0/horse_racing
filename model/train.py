@@ -6,6 +6,7 @@ Usage:
 
 import argparse
 import logging
+from dataclasses import dataclass
 
 import joblib
 import numpy as np
@@ -61,11 +62,30 @@ DEFAULT_HYPERPARAMS: dict[str, dict] = {
 }
 
 
-def prepare_df(
-    df: pl.DataFrame,
-    use_base_margin: bool = True,
-) -> tuple[pl.DataFrame, np.ndarray, np.ndarray, np.ndarray | None]:
-    """Return (X_raw, y, group_sizes, base_margin) sorted by race_id.
+@dataclass(frozen=True)
+class PreparedData:
+    """Race-sorted inputs for training or inference.
+
+    Attributes
+    ----------
+    X
+        Raw DataFrame sorted by `race_id`, ready for the sklearn Pipeline
+    y
+        Binary win labels, aligned with `X`
+    group_sizes
+        Number of horses per race, in `race_id` order
+    base_margin
+        `logit(market_prob)` aligned with `X`, or `None` if not requested
+    """
+
+    X: pl.DataFrame
+    y: np.ndarray
+    group_sizes: np.ndarray
+    base_margin: np.ndarray | None
+
+
+def prepare_df(df: pl.DataFrame, use_base_margin: bool = True) -> PreparedData:
+    """Sort `df` by race_id and extract aligned labels, group sizes, and base margin.
 
     Parameters
     ----------
@@ -74,17 +94,6 @@ def prepare_df(
     use_base_margin
         If True, compute `base_margin` as `logit(market_prob)` via `derive_features`;
         otherwise `base_margin` is `None`
-
-    Returns
-    -------
-    X_raw
-        Sorted raw DataFrame, ready for the sklearn Pipeline
-    y
-        Binary win labels
-    group_sizes
-        Number of horses per race, in race_id order
-    base_margin
-        `logit(market_prob)` if `use_base_margin` else `None`
     """
     df = df.sort("race_id")
     y = df["won"].to_numpy()
@@ -92,7 +101,7 @@ def prepare_df(
     base_margin = (
         base_margin_from_market_prob(derive_features(df)) if use_base_margin else None
     )
-    return df, y, group_sizes, base_margin
+    return PreparedData(X=df, y=y, group_sizes=group_sizes, base_margin=base_margin)
 
 
 def train(
@@ -130,12 +139,12 @@ def train(
 
     params = {**DEFAULT_HYPERPARAMS[model_type], **(hyperparameters or {})}
 
-    X_tr, y_tr, g_tr, m_tr = prepare_df(train_df, use_base_margin)
-    X_va, y_va, g_va, m_va = prepare_df(val_df, use_base_margin)
+    train_prepped = prepare_df(train_df, use_base_margin)
+    val_prepped = prepare_df(val_df, use_base_margin)
 
     logger.info(
-        f"train ({model_type}): {len(y_tr):,} rows / {len(g_tr):,} races | "
-        f"val: {len(y_va):,} rows / {len(g_va):,} races"
+        f"train ({model_type}): {len(train_prepped.y):,} rows / {len(train_prepped.group_sizes):,} races | "
+        f"val: {len(val_prepped.y):,} rows / {len(val_prepped.group_sizes):,} races"
     )
 
     if model_type == "ranker":
@@ -154,22 +163,22 @@ def train(
     # Fit feature steps on train, transform val — xgboost needs a pre-transformed
     # eval_set since sklearn Pipelines don't auto-transform fit kwargs.
     feature_pipeline = Pipeline(pipeline.steps[:-1])
-    X_tr_numpy = feature_pipeline.fit_transform(X_tr)
-    X_va_numpy = feature_pipeline.transform(X_va)
+    X_tr_numpy = feature_pipeline.fit_transform(train_prepped.X)
+    X_va_numpy = feature_pipeline.transform(val_prepped.X)
 
     fit_kwargs = {
-        "base_margin": m_tr,
-        "eval_set": [(X_va_numpy, y_va)],
-        "base_margin_eval_set": [m_va] if use_base_margin else None,
+        "base_margin": train_prepped.base_margin,
+        "eval_set": [(X_va_numpy, val_prepped.y)],
+        "base_margin_eval_set": [val_prepped.base_margin] if use_base_margin else None,
         "verbose": 50,
     }
     if model_type == "ranker":
-        fit_kwargs["group"] = g_tr
-        fit_kwargs["eval_group"] = [g_va]
+        fit_kwargs["group"] = train_prepped.group_sizes
+        fit_kwargs["eval_group"] = [val_prepped.group_sizes]
 
     # earlier pipeline steps (`feature_pipeline`) were already fit, so just need to fit
     # the estimator here
-    estimator.fit(X_tr_numpy, y_tr, **fit_kwargs)
+    estimator.fit(X_tr_numpy, train_prepped.y, **fit_kwargs)
 
     return pipeline
 

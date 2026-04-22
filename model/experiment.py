@@ -224,7 +224,7 @@ def _log_feature_importance(pipeline: Pipeline, features: list[str], val_df):
         mlflow.log_artifact(str(gain_plot))
 
         # -- SHAP --
-        X_val_raw, _, _, _ = prepare_df(val_df)
+        X_val_raw = prepare_df(val_df).X
         X_val = feature_pipeline.transform(X_val_raw)
         explainer = shap.TreeExplainer(estimator)
         shap_values = explainer.shap_values(X_val)
