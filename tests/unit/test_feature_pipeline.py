@@ -52,7 +52,7 @@ def raw_df() -> pl.DataFrame:
         "surface_wins": [3, 0, 0, 5, 1],
         "surface_seconds": [2, 0, 1, 3, 0],
         "surface_thirds": [1, 0, 1, 3, 0],
-        # PP aggregates (from _pp_features) and workout aggregates (from _workout_features)
+        # PP aggregates (from aggregate_pp_features + derive_pp_rollup_features) and workout aggregates (from _workout_features)
         "last_pp_date": [date(2023, 5, 10), None, date(2023, 4, 1), date(2023, 5, 20), date(2023, 5, 1)],
         "last_workout_date": [date(2023, 6, 5), date(2023, 6, 1), date(2023, 6, 3), date(2023, 6, 8), date(2023, 6, 5)],
         "distance_yards_L1": [1320, None, 1320, 1760, 1540],

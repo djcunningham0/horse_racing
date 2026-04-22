@@ -109,7 +109,7 @@ def build_raw_df(
         "surface_thirds",
     )
 
-    pp_feats = _pp_features(pp)
+    pp_feats = derive_pp_rollup_features(aggregate_pp_features(pp))
     workout_feats = _workout_features(workouts)
 
     # fmt: off
@@ -182,10 +182,12 @@ def _workout_features(workouts: pl.DataFrame) -> pl.DataFrame:
     # fmt: on
 
 
-def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
+def aggregate_pp_features(pp: pl.DataFrame) -> pl.DataFrame:
     """Aggregate past-performance rows into one row per (race_id, horse_name).
 
-    pp_index == 1 is the most recent prior race.
+    pp_index == 1 is the most recent prior race. Output columns are the L1/L2/L3 rollups
+    plus `last_pp_date` and `num_prior_starts`, before any cross-column derivations (see
+    `derive_pp_rollup_features`).
     """
     # fmt: off
     return (
@@ -307,6 +309,21 @@ def _pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             # count of prior starts
             pl.len().alias("num_prior_starts"),
         )
+    )
+    # fmt: on
+
+
+def derive_pp_rollup_features(df: pl.DataFrame) -> pl.DataFrame:
+    """Compute cross-column PP derivations on top of the L1/L2/L3 rollups.
+
+    Adds `relative_finish_L*`, `speed_fig_trend`, `avg_relative_finish`,
+    `pp_overperformance_L*`, and `pp_avg_overperformance_L3`. Safe to apply to either
+    `aggregate_pp_features` output (training) or client-supplied rollups (API), since it
+    only reads columns that exist in both.
+    """
+    # fmt: off
+    return (
+        df
         .with_columns(
             # relative finish
             (pl.col("official_finish_L1") / pl.col("num_starters_L1")).alias("relative_finish_L1"),
