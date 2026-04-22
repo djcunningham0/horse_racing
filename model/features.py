@@ -32,6 +32,7 @@ DEFAULT_RANDOM_SEED = 0
 # dynamics differ enough to add noise
 EXCLUDED_COURSE_DESCS: list[str] = ["Hurdle", "Downhill turf", "Timber"]
 
+
 def build_raw_df(
     processed_dir: Path | str = DEFAULT_PROCESSED_DIR,
     seed: int | None = None,

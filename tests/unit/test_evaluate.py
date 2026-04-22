@@ -60,5 +60,5 @@ def test_per_race_softmax_temperature_sharpens():
 def test_per_race_softmax_temperature_one_matches_default():
     df = pl.DataFrame({"race_id": [1, 1, 1], "score": [1.0, 2.0, 3.0]})
     default = _per_race_softmax(df, "score", "prob")["prob"].to_numpy()
-    explicit = _per_race_softmax(df, "score", "prob", temperature=1.0)["prob"].to_numpy()
+    explicit = _per_race_softmax(df, "score", "prob", temperature=1)["prob"].to_numpy()
     np.testing.assert_allclose(default, explicit)

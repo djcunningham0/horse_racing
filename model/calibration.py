@@ -66,9 +66,7 @@ def log_loss_at_T(
     derived = pipeline.named_steps["derive"].transform(df)
     X = pipeline.named_steps["select"].transform(derived)
     base_margin = base_margin_from_market_prob(derived) if use_base_margin else None
-    scores = predict_scores(
-        pipeline.named_steps["model"], X, base_margin=base_margin
-    )
+    scores = predict_scores(pipeline.named_steps["model"], X, base_margin=base_margin)
     tmp = derived.with_columns(pl.Series("_s", scores / temperature))
     tmp = tmp.filter(pl.col("won").max().over("race_id") == 1)
     tmp = _per_race_softmax(tmp, "_s", "_p")

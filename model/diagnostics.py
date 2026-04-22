@@ -466,7 +466,11 @@ def conditional_log_loss(df: pl.DataFrame, filter_expr: pl.Expr) -> dict:
     winning_race_ids = slice_df.filter(pl.col("won") == 1)["race_id"].unique()
     sub = slice_df.filter(pl.col("race_id").is_in(winning_race_ids))
     if sub.is_empty():
-        return {"n_races": 0, "model_log_loss": float("nan"), "market_log_loss": float("nan")}
+        return {
+            "n_races": 0,
+            "model_log_loss": float("nan"),
+            "market_log_loss": float("nan"),
+        }
     return {
         "n_races": int(winning_race_ids.len()),
         "model_log_loss": _log_loss_winner(sub, "model_prob"),
