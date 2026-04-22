@@ -1,0 +1,44 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# virtual environments
+venv/
+venv_horse_racing/
+.venv/
+
+# mlflow tracking
+mlruns/
+mlflow.db
+
+# raw/processed data (not needed at runtime; model bundle is self-contained)
+data/raw/
+data/processed/
+
+# unused at runtime
+notebooks/
+local_notes/
+streamlit_app/
+tests/
+scripts/
+
+# runtime state (mounted into the container)
+state/
+
+# git / editor / OS
+.git/
+.gitignore
+.vscode/
+.idea/
+.claude/
+.DS_Store
+
+# training-only model artifacts (hash-named files from experiment tracking;
+# runtime only needs the named pipeline bundle)
+model/artifacts/*.joblib
+!model/artifacts/xgb_pipeline_v1.joblib
