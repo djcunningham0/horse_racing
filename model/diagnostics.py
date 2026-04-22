@@ -14,7 +14,8 @@ import plotly.graph_objects as go
 import polars as pl
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
-from model.evaluate import _log_loss_winner, _market_probs, _per_race_softmax
+from model.evaluate import _log_loss_winner, _market_probs
+from model.inference import per_race_softmax, predict_from_raw
 
 EPS = 1e-12
 
@@ -32,18 +33,15 @@ DEFAULT_RELIABILITY_EDGES = [0.0, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30, 0.50, 1.0]
 
 def enrich(
     df: pl.DataFrame,
-    model,
-    features: list[str],
-    temperature: float = 1.0,
+    bundle: dict,
 ) -> pl.DataFrame:
     """Attach model_score, model_prob, market_prob, decimal_odds, ev_per_dollar.
 
     Drops races with no recorded winner so per-race win metrics are well defined.
+    market_prob is overwritten from final dollar_odds (the fair eval-time benchmark),
+    not the live-odds version that derive_features produced.
     """
-    X = df.select(features).to_numpy()
-    scores = model.predict(X)
-    df = df.with_columns(pl.Series("model_score", scores))
-    df = _per_race_softmax(df, "model_score", "model_prob", temperature)
+    df = predict_from_raw(df, bundle)
     df = _market_probs(df)
     df = df.filter(pl.col("won").max().over("race_id") == 1)
     return add_ev_columns(df)
@@ -227,8 +225,7 @@ def temperature_sweep(
     """Log-loss on winners at each temperature T (softmax(score / T) per race)."""
     rows = []
     for T in temps:
-        tmp = df.with_columns((pl.col(score_col) / float(T)).alias("_s"))
-        tmp = _per_race_softmax(tmp, "_s", "_p")
+        tmp = per_race_softmax(df, score_col, "_p", temperature=float(T))
         rows.append({"T": float(T), "log_loss": _log_loss_winner(tmp, "_p")})
     return pl.DataFrame(rows)
 

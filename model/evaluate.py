@@ -13,27 +13,13 @@ import polars as pl
 from sklearn.pipeline import Pipeline
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
-from model.features import base_margin_from_market_prob, build_raw_df, split_by_race
+from model.features import build_raw_df, split_by_race
+from model.inference import predict_from_raw
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
-from model.predict import predict_scores
 
 logger = logging.getLogger(__name__)
 
 EPS = 1e-12
-
-
-def _per_race_softmax(
-    df: pl.DataFrame,
-    score_col: str,
-    out_col: str,
-    temperature: float = 1.0,
-) -> pl.DataFrame:
-    """Add `out_col`: softmax of `score_col / temperature` within each race."""
-    scaled = pl.col(score_col) / temperature
-    shifted = scaled - scaled.max().over("race_id")
-    return df.with_columns(shifted.exp().alias(out_col)).with_columns(
-        pl.col(out_col) / pl.col(out_col).sum().over("race_id")
-    )
 
 
 def _market_probs(df: pl.DataFrame) -> pl.DataFrame:
@@ -95,25 +81,15 @@ def _metrics_for_split(
     temperature: float = 1.0,
     use_base_margin: bool = True,
 ) -> dict:
-    split_df = pipeline.named_steps["derive"].transform(split_df)
-    X = pipeline.named_steps["select"].transform(split_df)
-
-    # derive base_margin before _market_probs overwrites market_prob with a
-    # version computed from final dollar_odds
-    base_margin = base_margin_from_market_prob(split_df) if use_base_margin else None
-    scores = predict_scores(
-        model=pipeline.named_steps["model"],
-        X=X,
-        base_margin=base_margin,
-    )
-
-    split_df = split_df.with_columns(pl.Series("model_score", scores))
-    split_df = _per_race_softmax(
-        split_df,
-        score_col="model_score",
-        out_col="model_prob",
-        temperature=temperature,
-    )
+    bundle = {
+        "pipeline": pipeline,
+        "temperature": temperature,
+        "use_base_margin": use_base_margin,
+    }
+    # predict_from_raw adds model_score + model_prob; _market_probs then overwrites
+    # the live-odds-based market_prob with one computed from final dollar_odds, which
+    # is the fair benchmark for historical evaluation
+    split_df = predict_from_raw(split_df, bundle)
     split_df = _market_probs(split_df)
 
     # drop races with no winner
