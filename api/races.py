@@ -60,6 +60,8 @@ def create_race(body: CreateRaceRequest, request: Request) -> CreateRaceResponse
         course_desc=body.course_desc,
         race_class_rating=body.race_class_rating,
         purse=body.purse,
+        age_restriction=body.age_restriction,
+        sex_restriction=body.sex_restriction,
         runners=runners,
     )
     request.app.state.races[race_id] = race
@@ -160,6 +162,8 @@ def predict_stored_race(race_id: str, request: Request) -> PredictionResponse:
         course_desc=race.course_desc,
         race_class_rating=race.race_class_rating,
         purse=race.purse,
+        age_restriction=race.age_restriction,
+        sex_restriction=race.sex_restriction,
         runners=runner_inputs,
     )
     predictions = predict_race(race_request, request.app.state.model_bundle)

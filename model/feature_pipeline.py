@@ -28,9 +28,18 @@ FEATURE_NAMES: list[str] = [
     "is_all_weather",
     "race_class_rating",  # scale: 20-100+
     "purse",
+    "min_age_allowed",
+    "max_age_allowed",
+    "is_sex_restricted",
+    "is_female_only_race",
+    "is_male_only_race",
     # entry characteristics
     "post_position",
+    "post_position_bucket",
     "weight_carried",
+    "age",
+    "is_female",
+    "is_gelded",
     "entry_class_rating",  # scale: 300-800+
     "entry_class_rating_minus_field_avg",
     "entry_class_rating_to_field_avg_ratio",
@@ -138,6 +147,41 @@ def derive_features(df: pl.DataFrame) -> pl.DataFrame:
         .with_columns(
             # simple derivations
             (pl.col("entry_class_rating") / pl.col("race_class_rating")).alias("entry_to_race_class_ratio"),
+            # entry age
+            (pl.col("race_date").dt.year() - pl.col("year_of_birth")).alias("age"),
+            # entry sex flags — intact males (C/H/R/B) are the (0, 0) baseline
+            # (note: M=mare, not male)
+            pl.col("sex").is_in(["F", "M"]).cast(pl.Int8).alias("is_female"),
+            (pl.col("sex") == "G").cast(pl.Int8).alias("is_gelded"),
+            # post position bucket: 0=inside, 1=middle, 2=outside (terciles of field)
+            (
+                pl.when(pl.col("post_position") / pl.col("field_size") <= 1 / 3).then(0)
+                .when(pl.col("post_position") / pl.col("field_size") <= 2 / 3).then(1)
+                .otherwise(2)
+                .cast(pl.Int8)
+            ).alias("post_position_bucket"),
+            # race-level age restriction: parse 2-char code into min/max
+            # '3U' -> (3, 99); '02' -> (2, 2); '34' -> (3, 4)
+            # note: polars evaluates both when/otherwise branches, so cast the 'U'
+            # away first (replace with '9') to keep the otherwise branch safe
+            (
+                pl.when(pl.col("age_restriction").str.slice(0, 1) == "0")
+                .then(pl.col("age_restriction").str.replace("U", "9").str.slice(1, 1).cast(pl.Int8))
+                .otherwise(pl.col("age_restriction").str.slice(0, 1).cast(pl.Int8))
+            ).alias("min_age_allowed"),
+            (
+                pl.when(pl.col("age_restriction").str.slice(1, 1) == "U")
+                .then(99)
+                .otherwise(pl.col("age_restriction").str.replace("U", "9").str.slice(1, 1).cast(pl.Int8))
+            ).alias("max_age_allowed"),
+            # race-level sex restriction flags
+            # codes: A=colts+geldings, B=fillies+mares, C=colts, D=colts+fillies,
+            # E=fillies+geldings, F=fillies, G=geldings, H=horses, M=mares,
+            # I/J=all-male foreign, R=ridgelings foreign. null = unrestricted.
+            # D/E (mixed-sex) fall through as (is_sex_restricted=1, both=0).
+            pl.col("sex_restriction").is_not_null().cast(pl.Int8).alias("is_sex_restricted"),
+            pl.col("sex_restriction").is_in(["B", "F", "M"]).fill_null(False).cast(pl.Int8).alias("is_female_only_race"),
+            pl.col("sex_restriction").is_in(["A", "C", "G", "H", "I", "J", "R"]).fill_null(False).cast(pl.Int8).alias("is_male_only_race"),
         )
         .with_columns(
             ### comparison to previous races/workouts

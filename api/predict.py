@@ -63,6 +63,8 @@ def _build_raw_df(request: RaceRequest) -> pl.DataFrame:
         row["course_desc"] = request.course_desc
         row["race_class_rating"] = request.race_class_rating
         row["purse"] = request.purse
+        row["age_restriction"] = request.age_restriction
+        row["sex_restriction"] = request.sex_restriction
         row["field_size"] = field_size
         rows.append(row)
     return pl.DataFrame(rows)

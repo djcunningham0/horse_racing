@@ -98,6 +98,12 @@ def build_raw_df(
         "weight_carried",
         pl.col("class_rating").alias("entry_class_rating"),
         "purse",
+        "year_of_birth",
+        "sex",
+        # age_restriction and sex_restriction are race-level but included in entries
+        # (note: validated that they are always constant for all entries within a race)
+        "age_restriction",
+        "sex_restriction",
         "career_starts",
         "career_wins",
         "career_seconds",

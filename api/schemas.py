@@ -31,6 +31,8 @@ class StaticRunnerInput(BaseModel):
     )
     weight_carried: int | None
     entry_class_rating: float | None
+    year_of_birth: int
+    sex: Literal["G", "F", "M", "C", "H", "R", "B"]
     career_starts: int | None = None
     career_wins: int | None = None
     career_seconds: int | None = None
@@ -99,6 +101,14 @@ class RaceRequest(BaseModel):
     )
     race_class_rating: float
     purse: float
+    age_restriction: str | None = Field(
+        default=None,
+        description="2-char age restriction code, e.g. '3U' (3yo and up), '02' (2yo only)",
+    )
+    sex_restriction: str | None = Field(
+        default=None,
+        description="Sex restriction code, e.g. 'F' (fillies only), 'B' (fillies and mares); null = open",
+    )
     runners: list[RunnerInput] = Field(min_length=2)
 
 
@@ -128,6 +138,8 @@ class CreateRaceRequest(BaseModel):
     course_desc: str | None = None
     race_class_rating: float
     purse: float
+    age_restriction: str | None = None
+    sex_restriction: str | None = None
     runners: list[StaticRunnerInput] = Field(min_length=2)
 
 
@@ -152,6 +164,8 @@ class StoredRace(BaseModel):
     course_desc: str | None = None
     race_class_rating: float
     purse: float
+    age_restriction: str | None = None
+    sex_restriction: str | None = None
     runners: list[StoredRunner]
 
 

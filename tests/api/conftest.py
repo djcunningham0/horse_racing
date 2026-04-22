@@ -62,6 +62,8 @@ def sample_race_body(
             "morning_line_odds": 5.0 + i,
             "weight_carried": 122,
             "entry_class_rating": 75.0,
+            "year_of_birth": 2022,
+            "sex": "G",
             "num_prior_starts": 5,
             "speed_fig_L1": 80.0 + i,
             "speed_fig_L2": 78.0,
