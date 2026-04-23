@@ -1,7 +1,7 @@
 """Race pre-loading endpoints: create, list, update odds, scratch, predict."""
 
 from fastapi import APIRouter, HTTPException, Request
-from starlette.status import HTTP_201_CREATED
+from starlette.status import HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 from api.persistence import save_races
 from api.predict import predict_race
@@ -94,6 +94,21 @@ def list_races(request: Request) -> list[RaceSummary]:
 @router.get("/{race_id}", response_model=StoredRace)
 def get_race(race_id: str, request: Request) -> StoredRace:
     return _get_race(request, race_id)
+
+
+@router.delete("", status_code=HTTP_204_NO_CONTENT)
+def delete_all_races(request: Request):
+    request.app.state.races.clear()
+    _persist(request)
+
+
+@router.delete("/{race_id}", status_code=HTTP_204_NO_CONTENT)
+def delete_race(race_id: str, request: Request):
+    races: dict[str, StoredRace] = request.app.state.races
+    if race_id not in races:
+        raise HTTPException(status_code=404, detail=f"Race '{race_id}' not found")
+    del races[race_id]
+    _persist(request)
 
 
 @router.patch("/{race_id}/odds", response_model=StoredRace)
