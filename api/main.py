@@ -7,7 +7,7 @@ import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.status import HTTP_401_UNAUTHORIZED
 
@@ -56,6 +56,11 @@ else:
     )
 
 app.include_router(races_router)
+
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/app/")
 
 
 @app.get("/health")
