@@ -60,6 +60,25 @@ function surfaceLabel(s) {
   return s === "D" ? "Dirt" : "Turf";
 }
 
+// hash-based routing so refreshes restore the current screen
+function parseRoute() {
+  const hash = window.location.hash.replace(/^#\/?/, "");
+  const parts = hash.split("/").filter(Boolean);
+  if (parts[0] === "race" && parts[1]) {
+    if (parts[2] === "predictions") {
+      return { screen: "predictions", raceId: parts[1] };
+    }
+    return { screen: "detail", raceId: parts[1] };
+  }
+  return { screen: "list" };
+}
+
+function routeHash(screen, raceId) {
+  if (screen === "detail" && raceId) return `#/race/${raceId}`;
+  if (screen === "predictions" && raceId) return `#/race/${raceId}/predictions`;
+  return "";
+}
+
 // Alpine.js app data
 function horseApp() {
   return {
@@ -71,7 +90,82 @@ function horseApp() {
     error: null,
 
     async init() {
+      window.addEventListener("popstate", () => this.syncFromRoute());
+      // blank out the default list screen if refreshing into a race URL,
+      // so we don't flash the list while loading the race
+      if (parseRoute().screen !== "list") {
+        this.screen = null;
+      }
       await this.loadRaces();
+      await this.syncFromRoute();
+    },
+
+    pushRoute() {
+      const hash = routeHash(this.screen, this.currentRace?.race_id);
+      if (hash === window.location.hash) return;
+      const url = window.location.pathname + window.location.search + hash;
+      history.pushState(null, "", url);
+    },
+
+    async syncFromRoute() {
+      const route = parseRoute();
+      if (route.screen === "list") {
+        if (this.screen !== "list") {
+          this.screen = "list";
+          this.currentRace = null;
+          this.predictions = null;
+          this.clearError();
+          await this.loadRaces();
+        }
+        return;
+      }
+      if (route.screen === "detail") {
+        this.clearError();
+        this.loading = true;
+        try {
+          if (this.currentRace?.race_id !== route.raceId) {
+            this.currentRace = await fetchRace(route.raceId);
+            this.predictions = null;
+          }
+          this.screen = "detail";
+        } catch (e) {
+          this.error = e.message;
+          this.screen = "list";
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+        } finally {
+          this.loading = false;
+        }
+        return;
+      }
+      // route.screen === 'predictions'
+      this.clearError();
+      this.loading = true;
+      try {
+        if (this.currentRace?.race_id !== route.raceId) {
+          this.currentRace = await fetchRace(route.raceId);
+          this.predictions = null;
+        }
+        if (!this.predictions) {
+          this.predictions = await getPredictions(route.raceId);
+        }
+        this.screen = "predictions";
+      } catch (e) {
+        this.error = e.message;
+        this.screen = this.currentRace ? "detail" : "list";
+        history.replaceState(
+          null,
+          "",
+          window.location.pathname +
+            window.location.search +
+            routeHash(this.screen, this.currentRace?.race_id),
+        );
+      } finally {
+        this.loading = false;
+      }
     },
 
     clearError() {
@@ -95,7 +189,9 @@ function horseApp() {
       this.loading = true;
       try {
         this.currentRace = await fetchRace(raceId);
+        this.predictions = null;
         this.screen = "detail";
+        this.pushRoute();
       } catch (e) {
         this.error = e.message;
       } finally {
@@ -138,6 +234,7 @@ function horseApp() {
         await updateOdds(this.currentRace.race_id, odds);
         this.predictions = await getPredictions(this.currentRace.race_id);
         this.screen = "predictions";
+        this.pushRoute();
       } catch (e) {
         this.error = e.message;
       } finally {
@@ -150,6 +247,7 @@ function horseApp() {
       this.currentRace = null;
       this.predictions = null;
       this.clearError();
+      this.pushRoute();
       await this.loadRaces();
     },
 
@@ -157,6 +255,7 @@ function horseApp() {
       this.screen = "detail";
       this.predictions = null;
       this.clearError();
+      this.pushRoute();
     },
 
     // template helpers
