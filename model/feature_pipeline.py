@@ -26,7 +26,7 @@ FEATURE_NAMES: list[str] = [
     "is_dirt",
     "is_turf",
     "is_all_weather",
-    "race_class_rating",  # scale: 20-100+
+    "race_class_rating",
     "purse",
     "min_age_allowed",
     "max_age_allowed",
@@ -40,7 +40,7 @@ FEATURE_NAMES: list[str] = [
     "age",
     "is_female",
     "is_gelded",
-    "entry_class_rating",  # scale: 300-800+
+    "entry_class_rating",
     "entry_class_rating_minus_field_avg",
     "entry_class_rating_to_field_avg_ratio",
     "entry_to_race_class_ratio",
@@ -54,7 +54,7 @@ FEATURE_NAMES: list[str] = [
     "speed_fig_minus_field_avg_L1",
     "speed_fig_to_field_avg_ratio_L1",
     # PP class
-    "class_rating_L1",  # scale: 20-100+
+    "class_rating_L1",
     "class_rating_L2",
     "class_rating_L3",
     "avg_class_rating_L3",

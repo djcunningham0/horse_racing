@@ -113,7 +113,7 @@ ENTRIES_SCHEMA = {
     "equipment": pl.Utf8,
     "medication": pl.Utf8,
     "apprentice_weight_allowance": pl.Int64,
-    "class_rating": pl.Int64,
+    "class_rating": pl.Float64,
     "career_starts": pl.Int64,
     "career_wins": pl.Int64,
     "career_seconds": pl.Int64,
