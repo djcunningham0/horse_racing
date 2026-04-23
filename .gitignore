@@ -25,6 +25,7 @@ Thumbs.db
 # Project-specific
 data/raw/*
 data/processed/*
+data/staging/*
 model/artifacts/*
 state/
 !**/.gitkeep
