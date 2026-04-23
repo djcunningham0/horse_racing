@@ -190,12 +190,16 @@ def _parse_past_performance(
         finish = safe_int(xml_text(start, "OfficialFinish"))
         dnf = (finish or 0) >= 90  # values >= 90 are DNF codes (pulled up, eased, did not finish)  # fmt: skip
         row["pp_official_finish"] = finish if finish is not None and not dnf else None
-        # values are stored as displayed figure * 10 (e.g., 870 = 87); 9999 is a null sentinel
+        # values are stored as displayed figure * 10 (e.g., 870 = 87); 0 and 9999 are null sentinels
         raw_speed = safe_int(xml_text(start, "SpeedFigure"))
-        row["pp_speed_figure"] = raw_speed // 10 if raw_speed is not None and raw_speed != 9999 else None
+        row["pp_speed_figure"] = (
+            raw_speed // 10 if raw_speed not in (None, 0, 9999) else None
+        )
         row["pp_odds"] = parse_odds(xml_text(start, "Odds"))
         row["pp_weight_carried"] = safe_int(xml_text(start, "WeightCarried"))
-        row["pp_class_rating"] = safe_int(xml_text(start, "ClassRating"))
+        # 0 and 9999 are null sentinels
+        raw_class = safe_int(xml_text(start, "ClassRating"))
+        row["pp_class_rating"] = raw_class if raw_class not in (None, 0, 9999) else None
         row["pp_jockey_last_name"] = xml_text(start, "Jockey/LastName")
         row["pp_trainer_last_name"] = xml_text(start, "Trainer/LastName")
         row["pp_long_comment"] = xml_text(start, "LongComment")
