@@ -19,6 +19,7 @@ train = [
     "matplotlib",
     "mlflow",
     "openpyxl",
+    "optuna",
     "pandas",
     "plotly",
     "pyarrow",

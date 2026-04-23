@@ -111,6 +111,7 @@ def train(
     hyperparameters: dict | None = None,
     use_base_margin: bool = True,
     model_type: str = "classifier",
+    verbose: int | bool = 50,
 ) -> Pipeline:
     """Fit a feature + model sklearn Pipeline.
 
@@ -179,7 +180,7 @@ def train(
 
     fit_kwargs = {
         "base_margin": train_prepped.base_margin,
-        "verbose": 50,
+        "verbose": verbose,
     }
     if val_prepped is not None:
         X_va_numpy = feature_pipeline.transform(val_prepped.X)
