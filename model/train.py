@@ -106,7 +106,7 @@ def prepare_df(df: pl.DataFrame, use_base_margin: bool = True) -> PreparedData:
 
 def train(
     train_df: pl.DataFrame,
-    val_df: pl.DataFrame,
+    val_df: pl.DataFrame | None = None,
     features: list[str] | None = None,
     hyperparameters: dict | None = None,
     use_base_margin: bool = True,
@@ -116,8 +116,12 @@ def train(
 
     Parameters
     ----------
-    train_df, val_df
-        Raw DataFrames from `build_raw_df`.
+    train_df
+        Raw DataFrame from `build_raw_df`.
+    val_df
+        Optional validation DataFrame. If `None`, no `eval_set` is passed and early
+        stopping is disabled — the model trains for the full `n_estimators`. Used for
+        the final retrain on all available data.
     features
         Feature column names selected after the `derive` step (if None, defaults to
         `FEATURE_NAMES`)
@@ -138,13 +142,21 @@ def train(
         features = FEATURE_NAMES
 
     params = {**DEFAULT_HYPERPARAMS[model_type], **(hyperparameters or {})}
+    if val_df is None:
+        # no val set to early-stop on; train for the full n_estimators
+        params.pop("early_stopping_rounds", None)
 
     train_prepped = prepare_df(train_df, use_base_margin)
-    val_prepped = prepare_df(val_df, use_base_margin)
+    val_prepped = prepare_df(val_df, use_base_margin) if val_df is not None else None
 
+    val_summary = (
+        f"val: {len(val_prepped.y):,} rows / {len(val_prepped.group_sizes):,} races"
+        if val_prepped is not None
+        else "val: none (final retrain)"
+    )
     logger.info(
         f"train ({model_type}): {len(train_prepped.y):,} rows / {len(train_prepped.group_sizes):,} races | "
-        f"val: {len(val_prepped.y):,} rows / {len(val_prepped.group_sizes):,} races"
+        f"{val_summary}"
     )
 
     if model_type == "ranker":
@@ -164,17 +176,21 @@ def train(
     # eval_set since sklearn Pipelines don't auto-transform fit kwargs.
     feature_pipeline = Pipeline(pipeline.steps[:-1])
     X_tr_numpy = feature_pipeline.fit_transform(train_prepped.X)
-    X_va_numpy = feature_pipeline.transform(val_prepped.X)
 
     fit_kwargs = {
         "base_margin": train_prepped.base_margin,
-        "eval_set": [(X_va_numpy, val_prepped.y)],
-        "base_margin_eval_set": [val_prepped.base_margin] if use_base_margin else None,
         "verbose": 50,
     }
+    if val_prepped is not None:
+        X_va_numpy = feature_pipeline.transform(val_prepped.X)
+        fit_kwargs["eval_set"] = [(X_va_numpy, val_prepped.y)]
+        fit_kwargs["base_margin_eval_set"] = (
+            [val_prepped.base_margin] if use_base_margin else None
+        )
     if model_type == "ranker":
         fit_kwargs["group"] = train_prepped.group_sizes
-        fit_kwargs["eval_group"] = [val_prepped.group_sizes]
+        if val_prepped is not None:
+            fit_kwargs["eval_group"] = [val_prepped.group_sizes]
 
     # earlier pipeline steps (`feature_pipeline`) were already fit, so just need to fit
     # the estimator here
@@ -213,6 +229,20 @@ def main():
         default=1.0,
         help="Softmax temperature (float) or 'auto' to fit on the validation set.",
     )
+    parser.add_argument(
+        "--final-retrain",
+        action="store_true",
+        help=(
+            "Fit on train+val+test combined for deploy. Requires --n-estimators "
+            "(copied from the early-stopping run) and a numeric --temperature."
+        ),
+    )
+    parser.add_argument(
+        "--n-estimators",
+        type=int,
+        default=None,
+        help="Override n_estimators. Required with --final-retrain.",
+    )
     live_odds = parser.add_mutually_exclusive_group()
     live_odds.add_argument(
         "--use-morning-line-as-live",
@@ -226,17 +256,38 @@ def main():
     )
     args = parser.parse_args()
 
+    if args.final_retrain:
+        if args.n_estimators is None:
+            parser.error("--final-retrain requires --n-estimators")
+        if args.temperature == "auto":
+            parser.error("--final-retrain is incompatible with --temperature auto (no val set)")
+
     df = build_raw_df(
         use_morning_line_as_live=args.use_morning_line_as_live,
         use_final_as_live=args.use_final_as_live,
     )
-    train_df, val_df, _ = split_by_race(df)
-    pipeline = train(
-        train_df,
-        val_df,
-        use_base_margin=args.use_base_margin,
-        model_type=args.model_type,
+    train_df, val_df, test_df = split_by_race(df)
+
+    hyperparameters = (
+        {"n_estimators": args.n_estimators} if args.n_estimators is not None else None
     )
+    if args.final_retrain:
+        combined_df = pl.concat([train_df, val_df, test_df])
+        pipeline = train(
+            combined_df,
+            val_df=None,
+            hyperparameters=hyperparameters,
+            use_base_margin=args.use_base_margin,
+            model_type=args.model_type,
+        )
+    else:
+        pipeline = train(
+            train_df,
+            val_df,
+            hyperparameters=hyperparameters,
+            use_base_margin=args.use_base_margin,
+            model_type=args.model_type,
+        )
 
     if args.temperature == "auto":
         temperature = fit_temperature(
