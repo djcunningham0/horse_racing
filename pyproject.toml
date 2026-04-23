@@ -6,19 +6,23 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi",
     "joblib",
-    "openpyxl",
-    "pandas",
-    "plotly",
+    "numpy",
     "polars",
-    "pyarrow",
     "pydantic",
     "scikit-learn>=1.8",
     "uvicorn",
     "xgboost>=3.2",
-    "mlflow",
 ]
 
 [project.optional-dependencies]
+train = [
+    "matplotlib",
+    "mlflow",
+    "openpyxl",
+    "pandas",
+    "plotly",
+    "pyarrow",
+]
 dev = [
     "httpx",
     "pytest",
