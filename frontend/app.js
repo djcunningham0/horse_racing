@@ -90,6 +90,17 @@ function horseApp() {
     error: null,
 
     async init() {
+      window.addEventListener("error", (e) => {
+        this.reportClientError("error", e.message, e.error?.stack);
+      });
+      window.addEventListener("unhandledrejection", (e) => {
+        const reason = e.reason;
+        this.reportClientError(
+          "unhandledrejection",
+          reason?.message || String(reason),
+          reason?.stack,
+        );
+      });
       window.addEventListener("popstate", () => this.syncFromRoute());
       // blank out the default list screen if refreshing into a race URL,
       // so we don't flash the list while loading the race
@@ -170,6 +181,25 @@ function horseApp() {
 
     clearError() {
       this.error = null;
+    },
+
+    reportClientError(kind, message, stack) {
+      this.error = `${kind}: ${message}`;
+      const payload = JSON.stringify({
+        kind,
+        message,
+        stack,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        ts: new Date().toISOString(),
+      });
+      // fire-and-forget; keepalive so it survives a navigation
+      fetch("/client-error", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
     },
 
     async loadRaces() {

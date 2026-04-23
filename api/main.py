@@ -1,20 +1,23 @@
 """FastAPI app for horse racing predictions."""
 
 import base64
+import logging
 import os
 import secrets
 import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.status import HTTP_401_UNAUTHORIZED
+from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_500_INTERNAL_SERVER_ERROR
 
 from api.persistence import get_store_path, load_races
 from api.predict import load_model, predict_race
 from api.races import router as races_router
 from api.schemas import PredictionResponse, RaceRequest
+
+logger = logging.getLogger("horse_racing")
 
 # paths that skip Basic Auth (Render health checks hit /health)
 AUTH_EXEMPT_PATHS = {"/health"}
@@ -54,6 +57,23 @@ else:
         "WARNING: APP_USERNAME/APP_PASSWORD not set; API is unauthenticated",
         file=sys.stderr,
     )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": f"Internal error: {type(exc).__name__}"},
+    )
+
+
+@app.post("/client-error")
+async def client_error(request: Request):
+    body = await request.body()
+    logger.error("client error: %s", body.decode("utf-8", errors="replace")[:2000])
+    return Response(status_code=204)
+
 
 app.include_router(races_router)
 
