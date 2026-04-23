@@ -260,7 +260,9 @@ def main():
         if args.n_estimators is None:
             parser.error("--final-retrain requires --n-estimators")
         if args.temperature == "auto":
-            parser.error("--final-retrain is incompatible with --temperature auto (no val set)")
+            parser.error(
+                "--final-retrain is incompatible with --temperature auto (no val set)"
+            )
 
     df = build_raw_df(
         use_morning_line_as_live=args.use_morning_line_as_live,
