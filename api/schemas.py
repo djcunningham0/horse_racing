@@ -6,7 +6,7 @@ produce, so the API can assemble a DataFrame that feeds directly into
 (one row per runner, not one row per prior start).
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal, TypeAlias
 
 from pydantic import BaseModel, Field
@@ -187,3 +187,10 @@ class RaceSummary(BaseModel):
     distance_yards: int
     surface: SurfaceType
     num_runners: int
+
+
+class TwinSpiresOddsResponse(BaseModel):
+    race: StoredRace
+    fetched_at: datetime
+    applied_post_positions: list[int]
+    missing_post_positions: list[int]

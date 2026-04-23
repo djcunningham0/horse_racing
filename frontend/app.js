@@ -26,7 +26,7 @@ async function api(path, options = {}, { retries = 2, timeoutMs = 8000 } = {}) {
       const isNetworkErr = e.name === "AbortError" || e instanceof TypeError;
       if (!isNetworkErr || attempt >= retries) {
         if (e.name === "AbortError") {
-          throw new Error("Request timed out — check wifi");
+          throw new Error("Request timed out");
         }
         throw e;
       }
@@ -68,6 +68,10 @@ function unscratchRunner(raceId, postPosition) {
 
 function getPredictions(raceId) {
   return api(`/races/${raceId}/predict`, { method: "POST" });
+}
+
+function fetchTwinSpiresOdds(raceId) {
+  return api(`/races/${raceId}/fetch-twinspires-odds`, { method: "POST" });
 }
 
 // formatting helpers
@@ -117,8 +121,11 @@ function horseApp() {
     predictions: null,
     loading: false,
     error: null,
+    warning: null,
     lastRetry: null,
     online: true,
+    refreshingOdds: false,
+    lastOddsFetchAt: null,
 
     async init() {
       this.online = navigator.onLine;
@@ -175,6 +182,7 @@ function horseApp() {
           if (this.currentRace?.race_id !== route.raceId) {
             this.currentRace = await fetchRace(route.raceId);
             this.predictions = null;
+            this.lastOddsFetchAt = null;
           }
           this.screen = "detail";
         } catch (e) {
@@ -198,6 +206,7 @@ function horseApp() {
         if (this.currentRace?.race_id !== route.raceId) {
           this.currentRace = await fetchRace(route.raceId);
           this.predictions = null;
+          this.lastOddsFetchAt = null;
         }
         if (!this.predictions) {
           this.predictions = await getPredictions(route.raceId);
@@ -211,8 +220,8 @@ function horseApp() {
           null,
           "",
           window.location.pathname +
-            window.location.search +
-            routeHash(this.screen, this.currentRace?.race_id),
+          window.location.search +
+          routeHash(this.screen, this.currentRace?.race_id),
         );
       } finally {
         this.loading = false;
@@ -221,6 +230,7 @@ function horseApp() {
 
     clearError() {
       this.error = null;
+      this.warning = null;
       this.lastRetry = null;
     },
 
@@ -248,7 +258,7 @@ function horseApp() {
         headers: { "Content-Type": "application/json" },
         body: payload,
         keepalive: true,
-      }).catch(() => {});
+      }).catch(() => { });
     },
 
     async loadRaces() {
@@ -270,6 +280,7 @@ function horseApp() {
       try {
         this.currentRace = await fetchRace(raceId);
         this.predictions = null;
+        this.lastOddsFetchAt = null;
         this.screen = "detail";
         this.pushRoute();
       } catch (e) {
@@ -297,6 +308,40 @@ function horseApp() {
       } catch (e) {
         this.error = e.message;
       }
+    },
+
+    async refreshLiveOdds() {
+      if (!this.currentRace) return;
+      this.clearError();
+      this.refreshingOdds = true;
+      try {
+        const resp = await fetchTwinSpiresOdds(this.currentRace.race_id);
+        this.currentRace = resp.race;
+        this.lastOddsFetchAt = new Date(resp.fetched_at);
+        const missing = resp.missing_post_positions || [];
+        if (resp.applied_post_positions.length === 0) {
+          this.error =
+            "TwinSpires has no live odds yet (wagering may not be open).";
+        } else if (missing.length > 0) {
+          this.warning =
+            `TwinSpires returned no odds for post${missing.length > 1 ? "s" : ""} ` +
+            `${missing.join(", ")}. Missing odds will use morning-line defaults.`;
+        }
+      } catch (e) {
+        this.error = `Live odds fetch failed: ${e.message}`;
+        this.lastRetry = () => this.refreshLiveOdds();
+      } finally {
+        this.refreshingOdds = false;
+      }
+    },
+
+    fmtFetchedAt() {
+      if (!this.lastOddsFetchAt) return "";
+      return this.lastOddsFetchAt.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
     },
 
     async submitOdds() {
@@ -328,6 +373,7 @@ function horseApp() {
       this.screen = "list";
       this.currentRace = null;
       this.predictions = null;
+      this.lastOddsFetchAt = null;
       this.clearError();
       this.pushRoute();
       await this.loadRaces();

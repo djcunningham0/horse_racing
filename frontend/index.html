@@ -11,7 +11,7 @@
 <body x-data="horseApp()">
 
   <!-- Offline banner -->
-  <div x-show="!online" x-cloak class="offline-banner">Offline — check wifi</div>
+  <div x-show="!online" x-cloak class="offline-banner">Offline</div>
 
   <!-- Error banner (shared across screens) -->
   <div x-show="error" x-cloak class="error-banner">
@@ -19,6 +19,14 @@
     <div class="error-actions">
       <button x-show="lastRetry" @click="retryLast()">Retry</button>
       <button @click="clearError()">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- Warning banner (shared across screens) -->
+  <div x-show="warning" x-cloak class="warning-banner">
+    <span class="warning-msg" x-text="warning"></span>
+    <div class="warning-actions">
+      <button @click="warning = null">Dismiss</button>
     </div>
   </div>
 
@@ -49,7 +57,14 @@
 
   <!-- ==================== SCREEN 2: Race Detail / Odds Entry ==================== -->
   <div x-show="screen === 'detail'">
-    <button class="back-btn" @click="backToList()">&larr; Races</button>
+    <div class="detail-header">
+      <button class="back-btn" @click="backToList()">&larr; Races</button>
+      <button class="refresh-odds-btn"
+              @click="refreshLiveOdds()"
+              :disabled="refreshingOdds || loading"
+              x-text="refreshingOdds ? '…' : '↻ Live odds'">
+      </button>
+    </div>
 
     <h2>
       <span x-text="'Race ' + currentRace?.race_number"></span>
@@ -57,6 +72,9 @@
             x-text="currentRace ? (currentRace.distance_yards / 220).toFixed(1) + 'f ' + surfaceLabel(currentRace.surface) : ''">
       </span>
     </h2>
+
+    <div class="odds-fetched-at" x-show="lastOddsFetchAt" x-cloak
+         x-text="'Live odds updated ' + fmtFetchedAt()"></div>
 
     <template x-for="runner in currentRace?.runners" :key="runner.post_position">
       <div class="runner-row" :class="{ scratched: runner.scratched }">

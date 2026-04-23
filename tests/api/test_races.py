@@ -1,5 +1,7 @@
 """Tests for race pre-loading endpoints."""
 
+from datetime import datetime
+
 from tests.api.conftest import sample_race_body
 
 
@@ -162,6 +164,114 @@ class TestUnscratchRunner:
         client.post("/races", json=sample_race_body())
         r = client.patch("/races/CD-R1/runners/99/unscratch")
         assert r.status_code == 404
+
+
+class TestFetchTwinSpiresOdds:
+    def _patch_fetch(self, monkeypatch, odds_by_post=None, raises=None):
+        from api import twinspires
+
+        fetched_at = datetime(2026, 4, 23, 15, 30, 0).astimezone()
+
+        def _fake(track, race_number, *, breed="Thoroughbred"):
+            if raises is not None:
+                raise raises
+            return fetched_at, dict(odds_by_post or {})
+
+        monkeypatch.setattr(twinspires, "fetch_twinspires_odds", _fake)
+
+    def test_happy_path(self, client, monkeypatch):
+        client.post("/races", json=sample_race_body())
+        self._patch_fetch(monkeypatch, odds_by_post={1: 2.5, 2: 3.0, 3: 4.0})
+
+        r = client.post("/races/CD-R1/fetch-twinspires-odds")
+        assert r.status_code == 200
+        data = r.json()
+        runners = {x["post_position"]: x for x in data["race"]["runners"]}
+        assert runners[1]["live_odds"] == 2.5
+        assert runners[2]["live_odds"] == 3.0
+        assert runners[3]["live_odds"] == 4.0
+        assert sorted(data["applied_post_positions"]) == [1, 2, 3]
+        assert data["missing_post_positions"] == []
+        assert data["fetched_at"].startswith("2026-04-23")
+
+    def test_partial_odds_leaves_existing_untouched(self, client, monkeypatch):
+        client.post("/races", json=sample_race_body())
+        # ML defaults: post 1->6.0, 2->7.0, 3->8.0 (per sample_race_body)
+        self._patch_fetch(monkeypatch, odds_by_post={1: 2.5})
+
+        r = client.post("/races/CD-R1/fetch-twinspires-odds")
+        assert r.status_code == 200
+        data = r.json()
+        runners = {x["post_position"]: x for x in data["race"]["runners"]}
+        assert runners[1]["live_odds"] == 2.5
+        assert runners[2]["live_odds"] == 7.0  # morning-line default preserved
+        assert runners[3]["live_odds"] == 8.0
+        assert data["applied_post_positions"] == [1]
+        assert sorted(data["missing_post_positions"]) == [2, 3]
+
+    def test_all_null_odds(self, client, monkeypatch):
+        client.post("/races", json=sample_race_body())
+        self._patch_fetch(monkeypatch, odds_by_post={})
+
+        r = client.post("/races/CD-R1/fetch-twinspires-odds")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["applied_post_positions"] == []
+        assert sorted(data["missing_post_positions"]) == [1, 2, 3]
+        runners = {x["post_position"]: x for x in data["race"]["runners"]}
+        # morning-line defaults preserved
+        assert runners[1]["live_odds"] == 6.0
+
+    def test_scratched_runner_skipped(self, client, monkeypatch):
+        client.post("/races", json=sample_race_body())
+        client.patch("/races/CD-R1/runners/3/scratch")
+        self._patch_fetch(monkeypatch, odds_by_post={1: 2.5, 2: 3.0, 3: 9.9})
+
+        r = client.post("/races/CD-R1/fetch-twinspires-odds")
+        assert r.status_code == 200
+        data = r.json()
+        runners = {x["post_position"]: x for x in data["race"]["runners"]}
+        assert runners[3]["live_odds"] == 8.0  # scratched runner untouched
+        assert runners[3]["scratched"] is True
+        assert 3 not in data["applied_post_positions"]
+        assert 3 not in data["missing_post_positions"]
+
+    def test_network_error_surfaces_as_502(self, client, monkeypatch):
+        from api.twinspires import TwinSpiresError
+
+        client.post("/races", json=sample_race_body())
+        self._patch_fetch(monkeypatch, raises=TwinSpiresError("boom"))
+
+        r = client.post("/races/CD-R1/fetch-twinspires-odds")
+        assert r.status_code == 502
+        assert "TwinSpires unavailable" in r.json()["detail"]
+
+    def test_race_not_found_at_twinspires_surfaces_as_404(self, client, monkeypatch):
+        from api.twinspires import TwinSpiresRaceNotFound
+
+        client.post("/races", json=sample_race_body())
+        self._patch_fetch(
+            monkeypatch, raises=TwinSpiresRaceNotFound("no such race at TS")
+        )
+
+        r = client.post("/races/CD-R1/fetch-twinspires-odds")
+        assert r.status_code == 404
+        assert "no such race at TS" in r.json()["detail"]
+
+    def test_race_not_found(self, client):
+        r = client.post("/races/NOPE-R1/fetch-twinspires-odds")
+        assert r.status_code == 404
+
+    def test_updates_persist_across_get(self, client, monkeypatch):
+        client.post("/races", json=sample_race_body())
+        self._patch_fetch(monkeypatch, odds_by_post={1: 2.5, 2: 3.0})
+
+        client.post("/races/CD-R1/fetch-twinspires-odds")
+
+        race = client.get("/races/CD-R1").json()
+        runners = {x["post_position"]: x for x in race["runners"]}
+        assert runners[1]["live_odds"] == 2.5
+        assert runners[2]["live_odds"] == 3.0
 
 
 class TestPredictStoredRace:

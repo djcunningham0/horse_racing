@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Horse racing prediction system"
 requires-python = ">=3.13"
 dependencies = [
+    "cachetools",
+    "curl_cffi",
     "fastapi",
+    "httpx",
     "joblib",
     "numpy",
     "polars",
@@ -25,7 +28,6 @@ train = [
     "pyarrow",
 ]
 dev = [
-    "httpx",
     "pytest",
     "ruff",
 ]

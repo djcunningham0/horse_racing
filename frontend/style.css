@@ -57,6 +57,38 @@ h2 {
   margin-bottom: 8px;
 }
 
+/* race detail top row: back button + live-odds refresh */
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.refresh-odds-btn {
+  background: var(--accent-light);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.refresh-odds-btn:disabled {
+  background: #f0f0f0;
+  color: var(--muted);
+  border-color: var(--card-border);
+  cursor: not-allowed;
+}
+
+.odds-fetched-at {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
 /* race list cards */
 .race-card {
   background: var(--card-bg);
@@ -281,6 +313,42 @@ h2 {
 .error-actions button:first-child {
   background: var(--danger);
   color: #fff;
+}
+
+/* warning banner */
+.warning-banner {
+  background: #fff3cd;
+  color: #6b4a00;
+  padding: 12px;
+  border-radius: var(--radius);
+  margin-bottom: var(--spacing);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.warning-msg {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.warning-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.warning-actions button {
+  background: #fff;
+  color: #6b4a00;
+  border: 1px solid #6b4a00;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* offline banner */

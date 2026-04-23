@@ -37,9 +37,9 @@ _username = os.environ.get("APP_USERNAME")
 _password = os.environ.get("APP_PASSWORD")
 
 if _username and _password:
-    _expected_auth = "Basic " + base64.b64encode(
-        f"{_username}:{_password}".encode()
-    ).decode()
+    _expected_auth = (
+        "Basic " + base64.b64encode(f"{_username}:{_password}".encode()).decode()
+    )
 
     @app.middleware("http")
     async def basic_auth(request: Request, call_next):
@@ -52,6 +52,7 @@ if _username and _password:
             status_code=HTTP_401_UNAUTHORIZED,
             headers={"WWW-Authenticate": 'Basic realm="Horse Racing Predictor"'},
         )
+
 else:
     print(
         "WARNING: APP_USERNAME/APP_PASSWORD not set; API is unauthenticated",

@@ -15,7 +15,9 @@ from api.schemas import (
     RunnerInput,
     StoredRace,
     StoredRunner,
+    TwinSpiresOddsResponse,
 )
+from api import twinspires
 
 router = APIRouter(prefix="/races", tags=["races"])
 
@@ -163,6 +165,44 @@ def unscratch_runner(race_id: str, post_position: int, request: Request) -> Stor
     runner.scratched = False
     _persist(request)
     return race
+
+
+@router.post("/{race_id}/fetch-twinspires-odds", response_model=TwinSpiresOddsResponse)
+def fetch_twinspires_odds_endpoint(
+    race_id: str,
+    request: Request,
+) -> TwinSpiresOddsResponse:
+    race = _get_race(request, race_id)
+    try:
+        fetched_at, odds_by_post = twinspires.fetch_twinspires_odds(
+            race.track, race.race_number
+        )
+    except twinspires.TwinSpiresRaceNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except twinspires.TwinSpiresError as e:
+        raise HTTPException(status_code=502, detail=f"TwinSpires unavailable: {e}")
+
+    applied: list[int] = []
+    missing: list[int] = []
+    for runner in race.runners:
+        if runner.scratched:
+            continue
+        new_odds = odds_by_post.get(runner.post_position)
+        if new_odds is None:
+            missing.append(runner.post_position)
+        else:
+            runner.live_odds = new_odds
+            applied.append(runner.post_position)
+
+    if applied:
+        _persist(request)
+
+    return TwinSpiresOddsResponse(
+        race=race,
+        fetched_at=fetched_at,
+        applied_post_positions=applied,
+        missing_post_positions=missing,
+    )
 
 
 @router.post("/{race_id}/predict", response_model=PredictionResponse)
