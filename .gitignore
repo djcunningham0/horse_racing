@@ -27,6 +27,7 @@ data/raw/*
 data/processed/*
 data/staging/*
 model/artifacts/*
+!model/artifacts/xgb_pipeline_v1.joblib
 state/
 !**/.gitkeep
 
