@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import logging
+import os
 from pathlib import Path
 
 import httpx
@@ -55,11 +56,17 @@ def to_create_race_request(race_df: pl.DataFrame) -> CreateRaceRequest:
 def post_staged(csv_path: Path, base_url: str):
     df = load_staged(csv_path)
     race_numbers = df["race_number"].unique(maintain_order=True).to_list()
-    logger.info(f"loaded {df.height} runners across {len(race_numbers)} races from {csv_path}")
+    logger.info(
+        f"loaded {df.height} runners across {len(race_numbers)} races from {csv_path}"
+    )
 
-    with httpx.Client(base_url=base_url, timeout=10.0) as client:
+    user, pwd = os.environ.get("APP_USERNAME"), os.environ.get("APP_PASSWORD")
+    auth = (user, pwd) if user and pwd else None
+    with httpx.Client(base_url=base_url, timeout=10.0, auth=auth) as client:
         for race_number in race_numbers:
-            race_df = df.filter(pl.col("race_number") == race_number).sort("post_position")
+            race_df = df.filter(pl.col("race_number") == race_number).sort(
+                "post_position"
+            )
             payload = to_create_race_request(race_df).model_dump(mode="json")
             response = client.post("/races", json=payload)
             if response.status_code == 409:

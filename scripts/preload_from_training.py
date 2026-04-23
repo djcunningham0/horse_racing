@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import logging
+import os
 from datetime import date
 from pathlib import Path
 
@@ -18,7 +19,11 @@ import httpx
 import polars as pl
 
 from api.schemas import CreateRaceRequest, StaticRunnerInput
-from model.features import EXCLUDED_COURSE_DESCS, _workout_features, aggregate_pp_features
+from model.features import (
+    EXCLUDED_COURSE_DESCS,
+    _workout_features,
+    aggregate_pp_features,
+)
 from model.paths import DEFAULT_PROCESSED_DIR
 
 logger = logging.getLogger(__name__)
@@ -127,7 +132,9 @@ def preload(
     race_ids = df["race_id"].unique(maintain_order=True).to_list()
     logger.info(f"Found {len(race_ids)} races for {race_date} at {track}")
 
-    with httpx.Client(base_url=base_url, timeout=10.0) as client:
+    user, pwd = os.environ.get("APP_USERNAME"), os.environ.get("APP_PASSWORD")
+    auth = (user, pwd) if user and pwd else None
+    with httpx.Client(base_url=base_url, timeout=10.0, auth=auth) as client:
         for race_id in race_ids:
             race_df = df.filter(pl.col("race_id") == race_id)
             payload = to_create_race_request(race_df).model_dump(mode="json")

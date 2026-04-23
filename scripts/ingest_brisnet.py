@@ -248,7 +248,10 @@ def main():
         help="Path to Brisnet CSV (e.g. data/raw/brisnet/CDX0425.csv)",
     )
     parser.add_argument(
-        "--overrides", type=Path, required=True, help="Path to overrides CSV",
+        "--overrides",
+        type=Path,
+        required=True,
+        help="Path to overrides CSV",
     )
     parser.add_argument(
         "--out",
