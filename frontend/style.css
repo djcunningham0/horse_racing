@@ -250,6 +250,49 @@ h2 {
   border-radius: var(--radius);
   margin-bottom: var(--spacing);
   font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-msg {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.error-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.error-actions button {
+  background: #fff;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error-actions button:first-child {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* offline banner */
+.offline-banner {
+  background: #fff3cd;
+  color: #6b4a00;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-size: 14px;
+  text-align: center;
+  font-weight: 600;
 }
 
 /* loading */

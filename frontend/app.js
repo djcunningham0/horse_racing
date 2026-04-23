@@ -1,13 +1,42 @@
-// API helpers — all endpoints are on the same origin
-async function api(path, options = {}) {
+// API helpers — all endpoints are on the same origin.
+// Adds a per-attempt timeout and retries for network/timeout/5xx errors,
+// so flaky wifi (e.g. overloaded Churchill network) doesn't hang the UI.
+async function api(path, options = {}, { retries = 2, timeoutMs = 8000 } = {}) {
   const headers = {};
   if (options.body) headers["Content-Type"] = "application/json";
-  const res = await fetch(path, { headers, ...options });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${res.status})`);
+  let attempt = 0;
+  while (true) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(path, {
+        headers,
+        signal: controller.signal,
+        ...options,
+      });
+      if (res.ok) return res.json();
+      if (res.status < 500) {
+        // client error — don't retry
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.detail || `Request failed (${res.status})`);
+      }
+      if (attempt >= retries) throw new Error(`Server error (${res.status})`);
+      // 5xx falls through to retry
+    } catch (e) {
+      const isNetworkErr = e.name === "AbortError" || e instanceof TypeError;
+      if (!isNetworkErr || attempt >= retries) {
+        if (e.name === "AbortError") {
+          throw new Error("Request timed out — check wifi");
+        }
+        throw e;
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+    // backoff: 400ms, 1200ms
+    await new Promise((r) => setTimeout(r, 400 * (attempt + 1) ** 2));
+    attempt++;
   }
-  return res.json();
 }
 
 function fetchRaces() {
@@ -88,8 +117,17 @@ function horseApp() {
     predictions: null,
     loading: false,
     error: null,
+    lastRetry: null,
+    online: true,
 
     async init() {
+      this.online = navigator.onLine;
+      window.addEventListener("online", () => {
+        this.online = true;
+      });
+      window.addEventListener("offline", () => {
+        this.online = false;
+      });
       window.addEventListener("error", (e) => {
         this.reportClientError("error", e.message, e.error?.stack);
       });
@@ -141,6 +179,7 @@ function horseApp() {
           this.screen = "detail";
         } catch (e) {
           this.error = e.message;
+          this.lastRetry = () => this.selectRace(route.raceId);
           this.screen = "list";
           history.replaceState(
             null,
@@ -166,6 +205,7 @@ function horseApp() {
         this.screen = "predictions";
       } catch (e) {
         this.error = e.message;
+        this.lastRetry = () => this.syncFromRoute();
         this.screen = this.currentRace ? "detail" : "list";
         history.replaceState(
           null,
@@ -181,6 +221,15 @@ function horseApp() {
 
     clearError() {
       this.error = null;
+      this.lastRetry = null;
+    },
+
+    retryLast() {
+      const fn = this.lastRetry;
+      if (!fn) return;
+      this.lastRetry = null;
+      this.error = null;
+      fn();
     },
 
     reportClientError(kind, message, stack) {
@@ -209,6 +258,7 @@ function horseApp() {
         this.races = await fetchRaces();
       } catch (e) {
         this.error = e.message;
+        this.lastRetry = () => this.loadRaces();
       } finally {
         this.loading = false;
       }
@@ -224,6 +274,7 @@ function horseApp() {
         this.pushRoute();
       } catch (e) {
         this.error = e.message;
+        this.lastRetry = () => this.selectRace(raceId);
       } finally {
         this.loading = false;
       }
@@ -267,6 +318,7 @@ function horseApp() {
         this.pushRoute();
       } catch (e) {
         this.error = e.message;
+        this.lastRetry = () => this.submitOdds();
       } finally {
         this.loading = false;
       }

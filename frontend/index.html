@@ -10,8 +10,17 @@
 </head>
 <body x-data="horseApp()">
 
+  <!-- Offline banner -->
+  <div x-show="!online" x-cloak class="offline-banner">Offline — check wifi</div>
+
   <!-- Error banner (shared across screens) -->
-  <div x-show="error" x-cloak class="error-banner" x-text="error" @click="clearError()"></div>
+  <div x-show="error" x-cloak class="error-banner">
+    <span class="error-msg" x-text="error"></span>
+    <div class="error-actions">
+      <button x-show="lastRetry" @click="retryLast()">Retry</button>
+      <button @click="clearError()">Dismiss</button>
+    </div>
+  </div>
 
   <!-- ==================== SCREEN 1: Race List ==================== -->
   <div x-show="screen === 'list'">
