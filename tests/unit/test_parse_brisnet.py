@@ -26,16 +26,16 @@ CDX0425_PATH = Path("data/raw/brisnet/CDX0425.csv")
 @pytest.mark.parametrize(
     "code,expected",
     [
-        ("BUM", "3U"),   # 3yo and up, fillies/mares
-        ("BON", "03"),   # 3yo only
-        ("EON", "34"),   # 3 & 4yo only
-        ("FON", "45"),   # 4 & 5yo only
-        ("GON", "35"),   # 3,4,5yo only
-        ("AOC", "02"),   # 2yo only, colts/geldings
-        ("HUN", "2U"),   # all ages and up -> collapse to 2U
-        ("HON", "2U"),   # 'all ages only' also collapses to 2U
+        ("BUM", "3U"),  # 3yo and up, fillies/mares
+        ("BON", "03"),  # 3yo only
+        ("EON", "34"),  # 3 & 4yo only
+        ("FON", "45"),  # 4 & 5yo only
+        ("GON", "35"),  # 3,4,5yo only
+        ("AOC", "02"),  # 2yo only, colts/geldings
+        ("HUN", "2U"),  # all ages and up -> collapse to 2U
+        ("HON", "2U"),  # 'all ages only' also collapses to 2U
         ("", None),
-        ("XX", None),    # unknown age class
+        ("XX", None),  # unknown age class
     ],
 )
 def test_encode_age_restriction(code, expected):
@@ -45,9 +45,9 @@ def test_encode_age_restriction(code, expected):
 @pytest.mark.parametrize(
     "code,expected",
     [
-        ("BUM", "B"),   # mares + fillies
-        ("BOC", "A"),   # colts + geldings
-        ("BOF", "F"),   # fillies
+        ("BUM", "B"),  # mares + fillies
+        ("BOC", "A"),  # colts + geldings
+        ("BOF", "F"),  # fillies
         ("BUN", None),  # no sex restriction
         ("XX", None),
         ("", None),
@@ -91,8 +91,8 @@ def test_date_invalid():
 def test_sub_nonneg():
     assert _sub_nonneg("10", "3", "2") == 5
     assert _sub_nonneg("10", "", "2") == 8  # blank treated as 0
-    assert _sub_nonneg("", "3") is None     # blank minuend -> None
-    assert _sub_nonneg("3", "5") == 0       # floor at 0
+    assert _sub_nonneg("", "3") is None  # blank minuend -> None
+    assert _sub_nonneg("3", "5") == 0  # floor at 0
 
 
 # ---------- surface stats derivation ----------
@@ -122,15 +122,24 @@ def test_derive_surface_stats_dirt_today():
     # today = dirt -> lifetime (97-100) - turf (75-78); all-weather stays folded
     # into dirt to match Equibase's convention
     row = _row_with({
-        97: "20", 98: "5", 99: "4", 100: "3",
-        75: "5", 76: "1", 77: "1", 78: "0",
-        231: "2", 232: "0", 233: "1", 234: "0",
+        97: "20",
+        98: "5",
+        99: "4",
+        100: "3",
+        75: "5",
+        76: "1",
+        77: "1",
+        78: "0",
+        231: "2",
+        232: "0",
+        233: "1",
+        234: "0",
     })
     assert _derive_surface_stats(row, "D") == {
         "surface_starts": 15,  # 20 - 5
-        "surface_wins": 4,     # 5 - 1
+        "surface_wins": 4,  # 5 - 1
         "surface_seconds": 3,  # 4 - 1
-        "surface_thirds": 3,   # 3 - 0
+        "surface_thirds": 3,  # 3 - 0
     }
 
 
@@ -162,10 +171,10 @@ def test_parse_cdx0425_smoke():
     assert first["horse_name"] == "TOO MANY MIKES"
     assert first["race_id"] == "2026-04-25_CD_R1"
     assert first["surface"] == "D"
-    assert first["age_restriction"] == "3U"     # BUM -> 3yo and up
-    assert first["sex_restriction"] == "B"      # fillies and mares
+    assert first["age_restriction"] == "3U"  # BUM -> 3yo and up
+    assert first["sex_restriction"] == "B"  # fillies and mares
     assert first["sex"] == "F"
-    assert first["year_of_birth"] == 2022       # Brisnet yob "22"
+    assert first["year_of_birth"] == 2022  # Brisnet yob "22"
     assert first["morning_line_odds_float"] == 8.0
     assert first["weight_carried"] == 126
 
@@ -178,7 +187,5 @@ def test_parse_cdx0425_smoke():
     assert first_horse_pps[0]["pp_surface"] == "T"
 
     # workouts also keyed on race_id + horse_name
-    first_horse_workouts = [
-        w for w in workouts if w["horse_name"] == "TOO MANY MIKES"
-    ]
+    first_horse_workouts = [w for w in workouts if w["horse_name"] == "TOO MANY MIKES"]
     assert len(first_horse_workouts) > 0
