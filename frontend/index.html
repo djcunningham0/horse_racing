@@ -77,9 +77,8 @@
       </div>
     </template>
 
-    <button class="primary-btn" @click="submitOdds()" :disabled="loading">
-      <span x-show="!loading">Get Predictions</span>
-      <span x-show="loading">Loading...</span>
+    <button class="primary-btn" @click="submitOdds()" :disabled="loading"
+            x-text="loading ? 'Loading...' : 'Get Predictions'">
     </button>
   </div>
 
