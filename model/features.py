@@ -222,27 +222,27 @@ def aggregate_pp_features(pp: pl.DataFrame) -> pl.DataFrame:
             .max()
             .alias("max_speed_fig_L3"),
 
-            # class rating
-            pl.col("pp_class_rating")
-            .filter(pl.col("pp_index") == 1)
-            .first()
-            .alias("class_rating_L1"),
-            pl.col("pp_class_rating")
-            .filter(pl.col("pp_index") == 2)
-            .first()
-            .alias("class_rating_L2"),
-            pl.col("pp_class_rating")
-            .filter(pl.col("pp_index") == 3)
-            .first()
-            .alias("class_rating_L3"),
-            pl.col("pp_class_rating")
-            .filter(pl.col("pp_index") <= 3)
-            .mean()
-            .alias("avg_class_rating_L3"),
-            pl.col("pp_class_rating")
-            .filter(pl.col("pp_index") <= 3)
-            .max()
-            .alias("max_class_rating_L3"),
+            # # class rating -- not available in race day PP chart
+            # pl.col("pp_class_rating")
+            # .filter(pl.col("pp_index") == 1)
+            # .first()
+            # .alias("class_rating_L1"),
+            # pl.col("pp_class_rating")
+            # .filter(pl.col("pp_index") == 2)
+            # .first()
+            # .alias("class_rating_L2"),
+            # pl.col("pp_class_rating")
+            # .filter(pl.col("pp_index") == 3)
+            # .first()
+            # .alias("class_rating_L3"),
+            # pl.col("pp_class_rating")
+            # .filter(pl.col("pp_index") <= 3)
+            # .mean()
+            # .alias("avg_class_rating_L3"),
+            # pl.col("pp_class_rating")
+            # .filter(pl.col("pp_index") <= 3)
+            # .max()
+            # .alias("max_class_rating_L3"),
 
             # official finish
             pl.col("pp_official_finish")

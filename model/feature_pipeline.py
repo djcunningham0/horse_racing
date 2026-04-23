@@ -53,15 +53,15 @@ FEATURE_NAMES: list[str] = [
     "speed_fig_trend",
     "speed_fig_minus_field_avg_L1",
     "speed_fig_to_field_avg_ratio_L1",
-    # PP class
-    "class_rating_L1",
-    "class_rating_L2",
-    "class_rating_L3",
-    "avg_class_rating_L3",
-    "max_class_rating_L3",
-    "class_rating_diff_L1",
-    "class_rating_diff_avg_L3",
-    "class_rating_diff_max_L3",
+    # PP class -- not available in race day PP chart
+    # "class_rating_L1",
+    # "class_rating_L2",
+    # "class_rating_L3",
+    # "avg_class_rating_L3",
+    # "max_class_rating_L3",
+    # "class_rating_diff_L1",
+    # "class_rating_diff_avg_L3",
+    # "class_rating_diff_max_L3",
     # PP finishes
     "official_finish_L1",
     "official_finish_L2",
@@ -196,10 +196,10 @@ def derive_features(df: pl.DataFrame) -> pl.DataFrame:
             (pl.col("distance_yards") - pl.col("distance_yards_L1")).alias("distance_diff_L1"),
             (pl.col("distance_yards") - pl.col("distance_yards_L2")).alias("distance_diff_L2"),
             (pl.col("distance_yards") - pl.col("distance_yards_L3")).alias("distance_diff_L3"),
-            # race class rating
-            (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
-            (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
-            (pl.col("race_class_rating") - pl.col("max_class_rating_L3")).alias("class_rating_diff_max_L3"),
+            # race class rating -- pp class ratings not available in race day PP chart
+            # (pl.col("race_class_rating") - pl.col("class_rating_L1")).alias("class_rating_diff_L1"),
+            # (pl.col("race_class_rating") - pl.col("avg_class_rating_L3")).alias("class_rating_diff_avg_L3"),
+            # (pl.col("race_class_rating") - pl.col("max_class_rating_L3")).alias("class_rating_diff_max_L3"),
         )
         .with_columns(
             ### comparison to field (window functions)

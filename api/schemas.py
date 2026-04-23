@@ -49,11 +49,12 @@ class StaticRunnerInput(BaseModel):
     speed_fig_L3: float | None = None
     avg_speed_fig_L3: float | None = None
     max_speed_fig_L3: float | None = None
-    class_rating_L1: float | None = None
-    class_rating_L2: float | None = None
-    class_rating_L3: float | None = None
-    avg_class_rating_L3: float | None = None
-    max_class_rating_L3: float | None = None
+    # pp class ratings -- not available in race day PP chart
+    # class_rating_L1: float | None = None
+    # class_rating_L2: float | None = None
+    # class_rating_L3: float | None = None
+    # avg_class_rating_L3: float | None = None
+    # max_class_rating_L3: float | None = None
     official_finish_L1: int | None = None
     official_finish_L2: int | None = None
     official_finish_L3: int | None = None
