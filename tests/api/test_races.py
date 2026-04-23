@@ -48,6 +48,29 @@ class TestListRaces:
         assert len(r.json()) == 2
 
 
+class TestDeleteRace:
+    def test_delete_race(self, client):
+        client.post("/races", json=sample_race_body())
+        r = client.delete("/races/CD-R1")
+        assert r.status_code == 204
+        assert client.get("/races/CD-R1").status_code == 404
+
+    def test_delete_missing_race(self, client):
+        r = client.delete("/races/NOPE-R1")
+        assert r.status_code == 404
+
+    def test_delete_all_races(self, client):
+        client.post("/races", json=sample_race_body())
+        client.post("/races", json=sample_race_body(race_number=2))
+        r = client.delete("/races")
+        assert r.status_code == 204
+        assert client.get("/races").json() == []
+
+    def test_delete_all_when_empty(self, client):
+        r = client.delete("/races")
+        assert r.status_code == 204
+
+
 class TestUpdateOdds:
     def test_update_partial_odds(self, client):
         client.post("/races", json=sample_race_body())
