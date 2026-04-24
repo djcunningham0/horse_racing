@@ -23,12 +23,8 @@ import polars as pl
 from model.calibration import fit_temperature
 from model.evaluate import _metrics_for_split
 from model.experiment import EXPERIMENT_NAME, run_experiment
-from model.features import (
-    DEFAULT_SPLIT_MODE,
-    SPLIT_MODES,
-    build_raw_df,
-    split_by_race,
-)
+from model.features import build_raw_df
+from model.split import DEFAULT_SPLIT_MODE, SPLIT_MODES, split_by_race
 from model.train import DEFAULT_HYPERPARAMS, train
 
 logger = logging.getLogger(__name__)

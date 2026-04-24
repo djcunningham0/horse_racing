@@ -21,13 +21,8 @@ from model.feature_pipeline import (
     make_column_selector,
     make_feature_deriver,
 )
-from model.features import (
-    DEFAULT_SPLIT_MODE,
-    SPLIT_MODES,
-    base_margin_from_market_prob,
-    build_raw_df,
-    split_by_race,
-)
+from model.features import base_margin_from_market_prob, build_raw_df
+from model.split import DEFAULT_SPLIT_MODE, SPLIT_MODES, split_by_race
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
 logger = logging.getLogger(__name__)

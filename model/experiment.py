@@ -22,12 +22,8 @@ from xgboost import plot_importance
 from model.calibration import fit_temperature
 from model.evaluate import print_metrics_table, evaluate_splits
 from model.feature_pipeline import FEATURE_NAMES
-from model.features import (
-    DEFAULT_SPLIT_MODE,
-    SPLIT_MODES,
-    build_raw_df,
-    split_by_race,
-)
+from model.features import build_raw_df
+from model.split import DEFAULT_SPLIT_MODE, SPLIT_MODES, split_by_race
 from model.paths import DEFAULT_MODEL_DIR
 from model.train import DEFAULT_HYPERPARAMS, _temperature_arg, prepare_df, train
 

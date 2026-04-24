@@ -14,12 +14,8 @@ import polars as pl
 from sklearn.pipeline import Pipeline
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
-from model.features import (
-    DEFAULT_SPLIT_MODE,
-    SPLIT_MODES,
-    build_raw_df,
-    split_by_race,
-)
+from model.features import build_raw_df
+from model.split import DEFAULT_SPLIT_MODE, SPLIT_MODES, split_by_race
 from model.inference import predict_from_raw
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
