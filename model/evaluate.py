@@ -4,6 +4,7 @@ Usage:
     python -m model.evaluate
 """
 
+import argparse
 import logging
 from pathlib import Path
 
@@ -13,7 +14,12 @@ import polars as pl
 from sklearn.pipeline import Pipeline
 
 from model.betting import add_ev_columns, apply_bet_rule, summarize_roi
-from model.features import build_raw_df, split_by_race
+from model.features import (
+    DEFAULT_SPLIT_MODE,
+    SPLIT_MODES,
+    build_raw_df,
+    split_by_race,
+)
 from model.inference import predict_from_raw
 from model.paths import DEFAULT_MODEL_DIR, MODEL_FILENAME
 
@@ -184,7 +190,10 @@ def evaluate_splits(
     }
 
 
-def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
+def evaluate(
+    model_dir: Path = DEFAULT_MODEL_DIR,
+    split_mode: str = DEFAULT_SPLIT_MODE,
+) -> dict[str, dict]:
     """Load model from disk and evaluate. Convenience entrypoint."""
     bundle = joblib.load(model_dir / MODEL_FILENAME)
     pipeline = bundle["pipeline"]
@@ -193,7 +202,7 @@ def evaluate(model_dir: Path = DEFAULT_MODEL_DIR) -> dict[str, dict]:
     logger.info(f"using temperature T={temperature:.4f}")
 
     df = build_raw_df()
-    train_df, val_df, test_df = split_by_race(df)
+    train_df, val_df, test_df = split_by_race(df, mode=split_mode)
 
     metrics = evaluate_splits(
         pipeline=pipeline,
@@ -211,7 +220,18 @@ def main():
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
     )
-    evaluate()
+    parser = argparse.ArgumentParser(description="Evaluate the saved model")
+    parser.add_argument(
+        "--split-mode",
+        choices=SPLIT_MODES,
+        default=DEFAULT_SPLIT_MODE,
+        help=(
+            "How to split races into train/val/test. Must match what was used for "
+            "training, otherwise rows leak across splits."
+        ),
+    )
+    args = parser.parse_args()
+    evaluate(split_mode=args.split_mode)
 
 
 if __name__ == "__main__":

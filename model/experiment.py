@@ -22,7 +22,12 @@ from xgboost import plot_importance
 from model.calibration import fit_temperature
 from model.evaluate import print_metrics_table, evaluate_splits
 from model.feature_pipeline import FEATURE_NAMES
-from model.features import build_raw_df, split_by_race
+from model.features import (
+    DEFAULT_SPLIT_MODE,
+    SPLIT_MODES,
+    build_raw_df,
+    split_by_race,
+)
 from model.paths import DEFAULT_MODEL_DIR
 from model.train import DEFAULT_HYPERPARAMS, _temperature_arg, prepare_df, train
 
@@ -57,6 +62,15 @@ def main():
         default=1.0,
         help="Softmax temperature (float) or 'auto' to fit on the validation set.",
     )
+    parser.add_argument(
+        "--split-mode",
+        choices=SPLIT_MODES,
+        default=DEFAULT_SPLIT_MODE,
+        help=(
+            "How to split races into train/val/test. 'random' shuffles by race_id; "
+            "'chronological' uses earliest races for train and latest for test."
+        ),
+    )
     live_odds = parser.add_mutually_exclusive_group()
     live_odds.add_argument(
         "--use-morning-line-as-live",
@@ -73,6 +87,7 @@ def main():
     run_id = run_experiment(
         label=args.label,
         description=args.description,
+        split_kwargs={"mode": args.split_mode},
         use_base_margin=args.use_base_margin,
         model_type=args.model_type,
         temperature=args.temperature,

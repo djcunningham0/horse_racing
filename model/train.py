@@ -22,6 +22,8 @@ from model.feature_pipeline import (
     make_feature_deriver,
 )
 from model.features import (
+    DEFAULT_SPLIT_MODE,
+    SPLIT_MODES,
     base_margin_from_market_prob,
     build_raw_df,
     split_by_race,
@@ -244,6 +246,15 @@ def main():
         default=None,
         help="Override n_estimators. Required with --final-retrain.",
     )
+    parser.add_argument(
+        "--split-mode",
+        choices=SPLIT_MODES,
+        default=DEFAULT_SPLIT_MODE,
+        help=(
+            "How to split races into train/val/test. 'random' shuffles by race_id; "
+            "'chronological' uses earliest races for train and latest for test."
+        ),
+    )
     live_odds = parser.add_mutually_exclusive_group()
     live_odds.add_argument(
         "--use-morning-line-as-live",
@@ -269,7 +280,7 @@ def main():
         use_morning_line_as_live=args.use_morning_line_as_live,
         use_final_as_live=args.use_final_as_live,
     )
-    train_df, val_df, test_df = split_by_race(df)
+    train_df, val_df, test_df = split_by_race(df, mode=args.split_mode)
 
     hyperparameters = (
         {"n_estimators": args.n_estimators} if args.n_estimators is not None else None

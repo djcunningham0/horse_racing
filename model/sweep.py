@@ -23,7 +23,12 @@ import polars as pl
 from model.calibration import fit_temperature
 from model.evaluate import _metrics_for_split
 from model.experiment import EXPERIMENT_NAME, run_experiment
-from model.features import build_raw_df, split_by_race
+from model.features import (
+    DEFAULT_SPLIT_MODE,
+    SPLIT_MODES,
+    build_raw_df,
+    split_by_race,
+)
 from model.train import DEFAULT_HYPERPARAMS, train
 
 logger = logging.getLogger(__name__)
@@ -108,6 +113,7 @@ def run_sweep(
     model_type: str = "classifier",
     use_base_margin: bool = True,
     seed: int = 0,
+    split_mode: str = DEFAULT_SPLIT_MODE,
 ) -> dict:
     """Run an Optuna TPE sweep and retrain the best config with full evaluation.
 
@@ -116,7 +122,7 @@ def run_sweep(
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     df = build_raw_df()
-    train_df, val_df, _ = split_by_race(df)
+    train_df, val_df, _ = split_by_race(df, mode=split_mode)
 
     sampler = optuna.samplers.TPESampler(seed=seed)
     study = optuna.create_study(direction="minimize", sampler=sampler)
@@ -128,6 +134,7 @@ def run_sweep(
         mlflow.log_param("model_type", model_type)
         mlflow.log_param("use_base_margin", use_base_margin)
         mlflow.log_param("seed", seed)
+        mlflow.log_param("split.mode", split_mode)
 
         def objective(trial: optuna.Trial) -> float:
             return _run_trial(
@@ -165,6 +172,7 @@ def run_sweep(
         label=f"{label}_best",
         description=f"Best trial from sweep '{label}' (trial {best.number})",
         hyperparameters=best_hyperparams,
+        split_kwargs={"mode": split_mode},
         model_type=model_type,
         temperature="auto",
         use_base_margin=use_base_margin,
@@ -217,6 +225,15 @@ def main():
         help="Use logit(market_prob) as XGBoost base_margin",
     )
     parser.add_argument("--seed", type=int, default=0, help="TPE sampler seed")
+    parser.add_argument(
+        "--split-mode",
+        choices=SPLIT_MODES,
+        default=DEFAULT_SPLIT_MODE,
+        help=(
+            "How to split races into train/val/test. 'random' shuffles by race_id; "
+            "'chronological' uses earliest races for train and latest for test."
+        ),
+    )
     args = parser.parse_args()
 
     run_sweep(
@@ -225,6 +242,7 @@ def main():
         model_type=args.model_type,
         use_base_margin=args.use_base_margin,
         seed=args.seed,
+        split_mode=args.split_mode,
     )
 
 
