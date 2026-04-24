@@ -7,7 +7,7 @@ state on the server first.
 
 Usage:
     python -m scripts.post_staged_races data/staging/CDX0425.csv
-    python -m scripts.post_staged_races data/staging/CDX0425.csv --base-url https://api.example.com
+    python -m scripts.post_staged_races data/staging/CDX0425.csv --base-url https://benanza-bet.onrender.com
 """
 
 import argparse
