@@ -26,6 +26,7 @@ RACE_LEVEL_FIELDS = [
     "track",
     "race_number",
     "race_date",
+    "post_time",
     "distance_yards",
     "surface",
     "course_desc",

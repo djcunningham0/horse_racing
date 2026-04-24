@@ -7,23 +7,24 @@ script can build `CreateRaceRequest` payloads directly from it.
 
 Overrides CSV: one row per runner, keyed on (race_number, post_position). All
 columns below are required; extra columns (e.g. `horse_name` for data entry
-convenience) are ignored. `race_class_rating` must be non-null for every runner;
+convenience) are ignored. `race_class_rating` and `post_time` must be non-null
+and consistent within each race (they are race-level values repeated per row);
 `entry_class_rating` and `speed_fig_L{1,2,3}` cells may be blank, in which case
 the blank overwrites the BRIS value with null — the override is always authoritative.
 
 Overrides CSV format:
 
-| race_number | post_position | race_class_rating | entry_class_rating | speed_fig_L1 | speed_fig_L2 | speed_fig_L3 |
-|-------------|---------------|-------------------|--------------------|--------------|--------------|--------------|
-| 1           | 1             | 85                | 450                | 76           | 72           | 68           |
-| 1           | 2             | 85                | 480                | 82           | 78           |              |
+| race_number | post_position | race_class_rating | post_time | entry_class_rating | speed_fig_L1 | speed_fig_L2 | speed_fig_L3 |
+|-------------|---------------|-------------------|-----------|--------------------|--------------|--------------|--------------|
+| 1           | 1             | 85                | 5:34 PM   | 450                | 76           | 72           | 68           |
+| 1           | 2             | 85                | 5:34 PM   | 480                | 82           | 78           |              |
 
-Staged CSV format (abbreviated; 52 cols total = 10 race-level + `StaticRunnerInput`):
+Staged CSV format (abbreviated; 53 cols total = 11 race-level + `StaticRunnerInput`):
 
-| track | race_number | race_date  | race_class_rating | horse_name     | post_position | entry_class_rating | avg_speed_fig_L3 |
-|-------|-------------|------------|-------------------|----------------|---------------|--------------------|------------------|
-| CD    | 1           | 2026-04-25 | 85                | TOO MANY MIKES | 1             | 450                | 72.0             |
-| CD    | 1           | 2026-04-25 | 85                | ISLAND GIRL    | 2             | 480                | 80.0             |
+| track | race_number | race_date  | post_time | race_class_rating | horse_name     | post_position | entry_class_rating | avg_speed_fig_L3 |
+|-------|-------------|------------|-----------|-------------------|----------------|---------------|--------------------|------------------|
+| CD    | 1           | 2026-04-25 | 5:34 PM   | 85                | TOO MANY MIKES | 1             | 450                | 72.0             |
+| CD    | 1           | 2026-04-25 | 5:34 PM   | 85                | ISLAND GIRL    | 2             | 480                | 80.0             |
 
 Usage:
     python -m scripts.ingest_brisnet data/raw/brisnet/CDX0425.csv --overrides data/raw/overrides/CDX0425_overrides.csv
@@ -51,6 +52,7 @@ RACE_LEVEL_COLS: list[str] = [
     "track",
     "race_number",
     "race_date",
+    "post_time",
     "distance_yards",
     "surface",
     "course_desc",
@@ -64,6 +66,7 @@ REQUIRED_OVERRIDE_COLS = {
     "race_number",
     "post_position",
     "race_class_rating",
+    "post_time",
     "entry_class_rating",
     "speed_fig_L1",
     "speed_fig_L2",
@@ -185,10 +188,14 @@ def _validate_one_to_one(entries: pl.DataFrame, overrides: pl.DataFrame):
 def _apply_entry_overrides(
     entries: pl.DataFrame, overrides: pl.DataFrame
 ) -> pl.DataFrame:
-    """Merge race_class_rating + entry_class_rating from overrides into entries."""
+    """Merge race_class_rating, post_time, entry_class_rating from overrides into entries."""
     return entries.join(
         overrides.select(
-            "race_number", "post_position", "race_class_rating", "entry_class_rating"
+            "race_number",
+            "post_position",
+            "race_class_rating",
+            "post_time",
+            "entry_class_rating",
         ),
         on=["race_number", "post_position"],
         how="left",
@@ -214,26 +221,27 @@ def _apply_speed_fig_overrides(
 
 
 def _validate_required(entries: pl.DataFrame):
-    """Null race_class_rating cells and within-race rcr disagreements.
+    """Null race-level cells and within-race disagreements.
 
     entry_class_rating is allowed to be null (some runners have no rating on the PDF).
     """
-    missing = entries.filter(pl.col("race_class_rating").is_null())
-    if missing.height > 0:
-        rows = missing.select("race_number", "post_position", "horse_name").sort(
-            "race_number", "post_position"
-        )
-        raise ValueError(f"race_class_rating blank for runners:\n{rows}")
+    for col in ("race_class_rating", "post_time"):
+        missing = entries.filter(pl.col(col).is_null())
+        if missing.height > 0:
+            rows = missing.select("race_number", "post_position", "horse_name").sort(
+                "race_number", "post_position"
+            )
+            raise ValueError(f"{col} blank for runners:\n{rows}")
 
-    dup = (
-        entries.group_by("race_id")
-        .agg(pl.col("race_class_rating").n_unique().alias("n_distinct"))
-        .filter(pl.col("n_distinct") > 1)
-    )
-    if dup.height > 0:
-        raise ValueError(
-            f"race_class_rating disagrees within race(s): {dup['race_id'].to_list()}"
+        dup = (
+            entries.group_by("race_id")
+            .agg(pl.col(col).n_unique().alias("n_distinct"))
+            .filter(pl.col("n_distinct") > 1)
         )
+        if dup.height > 0:
+            raise ValueError(
+                f"{col} disagrees within race(s): {dup['race_id'].to_list()}"
+            )
 
 
 def main():
