@@ -86,11 +86,94 @@ function fmtEv(ev) {
 
 function fmtOdds(odds) {
   if (odds == null) return "-";
-  return odds.toFixed(1);
+  // whole numbers show as integers (8.0 -> "8"); fractional odds keep one decimal (2.5 -> "2.5")
+  return Number.isInteger(odds) ? String(odds) : odds.toFixed(1);
 }
 
 function surfaceLabel(s) {
   return s === "D" ? "Dirt" : "Turf";
+}
+
+// Format distance in yards as "N furlongs" for sub-mile races or "N M/D mile" for mile+.
+function distanceLabel(yards) {
+  // under 1 mile -> furlongs, rounded to the nearest half-furlong (110 yards)
+  if (yards < 1760) {
+    const halves = Math.round(yards / 110);
+    const whole = Math.floor(halves / 2);
+    const half = halves % 2 === 1;
+    return half ? `${whole} 1/2 furlongs` : `${whole} furlongs`;
+  }
+  // 1+ mile -> express as 16ths of a mile (110 yards per 1/16 mile), reduced
+  const sixteenths = Math.round(yards / 110);
+  const miles = Math.floor(sixteenths / 16);
+  const rem = sixteenths % 16;
+  if (rem === 0) return `${miles} mile`;
+  const g = gcd(rem, 16);
+  return `${miles} ${rem / g}/${16 / g} mile`;
+}
+
+function gcd(a, b) {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+// Build a short restriction label, e.g. "3yo+ F", "2yo", "3yo F&M", or "" if no restriction.
+function restrictionLabel(age, sex) {
+  const parts = [];
+  if (age) {
+    const second = age[1];
+    if (second === "U" || second === "+") {
+      parts.push(`${age[0]}yo+`);
+    } else {
+      const n = parseInt(age, 10);
+      parts.push(Number.isNaN(n) ? age : `${n}yo`);
+    }
+  }
+  if (sex === "F") parts.push("F");
+  else if (sex === "B") parts.push("F&M");
+  return parts.join(" ");
+}
+
+// "6 furlongs · Dirt · 3yo+ F" — used on list cards and the detail header.
+function raceMetaStr(race) {
+  const parts = [distanceLabel(race.distance_yards), surfaceLabel(race.surface)];
+  const restriction = restrictionLabel(race.age_restriction, race.sex_restriction);
+  if (restriction) parts.push(restriction);
+  return parts.join(" \u00b7 ");
+}
+
+const TRACK_NAMES = {
+  CD: "Churchill Downs",
+  KEE: "Keeneland",
+};
+
+function trackName(code) {
+  return TRACK_NAMES[code] || code;
+}
+
+// Group races by (race_date, track). Returns a list sorted by date (asc) then track,
+// with each group's races sorted by race_number.
+function groupRaces(races) {
+  const groups = {};
+  for (const race of races) {
+    const key = `${race.race_date}|${race.track}`;
+    if (!groups[key]) {
+      groups[key] = {
+        key,
+        date: race.race_date,
+        track: race.track,
+        label: `${race.race_date} \u00b7 ${trackName(race.track)}`,
+        races: [],
+      };
+    }
+    groups[key].races.push(race);
+  }
+  const list = Object.values(groups);
+  list.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return a.track < b.track ? -1 : 1;
+  });
+  for (const g of list) g.races.sort((a, b) => a.race_number - b.race_number);
+  return list;
 }
 
 // hash-based routing so refreshes restore the current screen
@@ -122,7 +205,6 @@ function horseApp() {
     loading: false,
     error: null,
     warning: null,
-    lastRetry: null,
     online: true,
     refreshingOdds: false,
     lastOddsFetchAt: null,
@@ -187,7 +269,6 @@ function horseApp() {
           this.screen = "detail";
         } catch (e) {
           this.error = e.message;
-          this.lastRetry = () => this.selectRace(route.raceId);
           this.screen = "list";
           history.replaceState(
             null,
@@ -214,7 +295,6 @@ function horseApp() {
         this.screen = "predictions";
       } catch (e) {
         this.error = e.message;
-        this.lastRetry = () => this.syncFromRoute();
         this.screen = this.currentRace ? "detail" : "list";
         history.replaceState(
           null,
@@ -231,15 +311,6 @@ function horseApp() {
     clearError() {
       this.error = null;
       this.warning = null;
-      this.lastRetry = null;
-    },
-
-    retryLast() {
-      const fn = this.lastRetry;
-      if (!fn) return;
-      this.lastRetry = null;
-      this.error = null;
-      fn();
     },
 
     reportClientError(kind, message, stack) {
@@ -268,7 +339,6 @@ function horseApp() {
         this.races = await fetchRaces();
       } catch (e) {
         this.error = e.message;
-        this.lastRetry = () => this.loadRaces();
       } finally {
         this.loading = false;
       }
@@ -285,7 +355,6 @@ function horseApp() {
         this.pushRoute();
       } catch (e) {
         this.error = e.message;
-        this.lastRetry = () => this.selectRace(raceId);
       } finally {
         this.loading = false;
       }
@@ -329,7 +398,6 @@ function horseApp() {
         }
       } catch (e) {
         this.error = `Live odds fetch failed: ${e.message}`;
-        this.lastRetry = () => this.refreshLiveOdds();
       } finally {
         this.refreshingOdds = false;
       }
@@ -363,7 +431,6 @@ function horseApp() {
         this.pushRoute();
       } catch (e) {
         this.error = e.message;
-        this.lastRetry = () => this.submitOdds();
       } finally {
         this.loading = false;
       }
@@ -391,5 +458,10 @@ function horseApp() {
     fmtEv,
     fmtOdds,
     surfaceLabel,
+    distanceLabel,
+    restrictionLabel,
+    raceMetaStr,
+    trackName,
+    groupRaces,
   };
 }

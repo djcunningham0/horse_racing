@@ -134,6 +134,10 @@ class CreateRaceRequest(BaseModel):
     track: str = Field(description="Track code, e.g. 'CD'")
     race_number: int = Field(ge=1)
     race_date: date
+    post_time: str | None = Field(
+        default=None,
+        description="Approximate race post time as free-form text, e.g. '5:34 PM'",
+    )
     distance_yards: int = Field(gt=0, description="Race distance in yards")
     surface: SurfaceType = Field(description="'D' for dirt, 'T' for turf")
     course_desc: str | None = None
@@ -160,6 +164,7 @@ class StoredRace(BaseModel):
     track: str
     race_number: int
     race_date: date
+    post_time: str | None = None
     distance_yards: int
     surface: SurfaceType
     course_desc: str | None = None
@@ -184,8 +189,11 @@ class RaceSummary(BaseModel):
     track: str
     race_number: int
     race_date: date
+    post_time: str | None = None
     distance_yards: int
     surface: SurfaceType
+    age_restriction: str | None = None
+    sex_restriction: str | None = None
     num_runners: int
 
 

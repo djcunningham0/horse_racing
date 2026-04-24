@@ -23,6 +23,19 @@ class TestCreateRace:
         r = client.post("/races", json=sample_race_body())
         assert r.status_code == 409
 
+    def test_post_time_roundtrips(self, client):
+        body = sample_race_body()
+        body["post_time"] = "5:34 PM ET"
+        client.post("/races", json=body)
+        r = client.get("/races/CD-R1")
+        assert r.json()["post_time"] == "5:34 PM ET"
+
+    def test_post_time_optional(self, client):
+        # sample_race_body does not set post_time; should default to None
+        client.post("/races", json=sample_race_body())
+        r = client.get("/races/CD-R1")
+        assert r.json()["post_time"] is None
+
 
 class TestGetRace:
     def test_get_race(self, client):
@@ -48,6 +61,17 @@ class TestListRaces:
         client.post("/races", json=sample_race_body(race_number=2))
         r = client.get("/races")
         assert len(r.json()) == 2
+
+    def test_list_exposes_post_time_and_restrictions(self, client):
+        body = sample_race_body()
+        body["post_time"] = "5:34 PM ET"
+        body["age_restriction"] = "3U"
+        body["sex_restriction"] = "F"
+        client.post("/races", json=body)
+        summaries = client.get("/races").json()
+        assert summaries[0]["post_time"] == "5:34 PM ET"
+        assert summaries[0]["age_restriction"] == "3U"
+        assert summaries[0]["sex_restriction"] == "F"
 
 
 class TestDeleteRace:

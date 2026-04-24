@@ -17,7 +17,6 @@
   <div x-show="error" x-cloak class="error-banner">
     <span class="error-msg" x-text="error"></span>
     <div class="error-actions">
-      <button x-show="lastRetry" @click="retryLast()">Retry</button>
       <button @click="clearError()">Dismiss</button>
     </div>
   </div>
@@ -40,17 +39,18 @@
       No races loaded yet.<br>Create races via the API.
     </div>
 
-    <template x-for="race in races" :key="race.race_id">
-      <div class="race-card" @click="selectRace(race.race_id)">
-        <div>
-          <div class="race-card-title" x-text="'R' + race.race_number"></div>
-          <div class="race-card-meta">
-            <span x-text="(race.distance_yards / 220).toFixed(1) + 'f'"></span>
-            &middot;
-            <span x-text="surfaceLabel(race.surface)"></span>
+    <template x-for="group in groupRaces(races)" :key="group.key">
+      <div class="race-group">
+        <div class="race-group-header" x-text="group.label"></div>
+        <template x-for="race in group.races" :key="race.race_id">
+          <div class="race-card" @click="selectRace(race.race_id)">
+            <div class="race-card-title-row">
+              <span class="race-card-title" x-text="'Race ' + race.race_number"></span>
+              <span class="race-card-post-time" x-show="race.post_time" x-text="race.post_time"></span>
+            </div>
+            <div class="race-card-meta" x-text="raceMetaStr(race)"></div>
           </div>
-        </div>
-        <div class="race-card-meta" x-text="race.num_runners + ' runners'"></div>
+        </template>
       </div>
     </template>
   </div>
@@ -68,8 +68,8 @@
 
     <h2>
       <span x-text="'Race ' + currentRace?.race_number"></span>
-      <span style="font-weight: 400; font-size: 16px; color: var(--text-secondary);"
-            x-text="currentRace ? (currentRace.distance_yards / 220).toFixed(1) + 'f ' + surfaceLabel(currentRace.surface) : ''">
+      <span class="race-header-meta"
+            x-text="currentRace ? raceMetaStr(currentRace) : ''">
       </span>
     </h2>
 
@@ -139,8 +139,9 @@
             &middot; Edge <span x-text="fmtProb(pred.edge)"></span>
           </div>
         </div>
-        <div class="pred-ev" :class="pred.ev_per_dollar > 0 ? 'positive' : 'negative'"
-             x-text="fmtEv(pred.ev_per_dollar)">
+        <div class="pred-ev" :class="pred.ev_per_dollar > 0 ? 'positive' : 'negative'">
+          <div class="pred-ev-label">EV</div>
+          <div class="pred-ev-value" x-text="fmtEv(pred.ev_per_dollar)"></div>
         </div>
       </div>
     </template>

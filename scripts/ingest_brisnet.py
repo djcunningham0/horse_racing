@@ -26,9 +26,7 @@ Staged CSV format (abbreviated; 52 cols total = 10 race-level + `StaticRunnerInp
 | CD    | 1           | 2026-04-25 | 85                | ISLAND GIRL    | 2             | 480                | 80.0             |
 
 Usage:
-    python -m scripts.ingest_brisnet \\
-        data/raw/brisnet/CDX0425.csv \\
-        --overrides data/raw/overrides/CDX0425_overrides.csv
+    python -m scripts.ingest_brisnet data/raw/brisnet/CDX0425.csv --overrides data/raw/overrides/CDX0425_overrides.csv
 """
 
 import argparse

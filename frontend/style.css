@@ -89,17 +89,29 @@ h2 {
   margin-bottom: 8px;
 }
 
-/* race list cards */
+/* race list groups + cards */
+.race-group {
+  margin-bottom: 20px;
+}
+
+.race-group:last-child {
+  margin-bottom: 0;
+}
+
+.race-group-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
 .race-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
   padding: var(--spacing);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   transition: background 0.1s;
 }
 
@@ -107,14 +119,34 @@ h2 {
   background: #e8e8e8;
 }
 
+.race-card-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .race-card-title {
   font-weight: 600;
   font-size: 20px;
 }
 
+.race-card-post-time {
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 400;
+}
+
 .race-card-meta {
   color: var(--text-secondary);
   font-size: 15px;
+}
+
+/* detail-screen header metadata (distance · surface · restriction) */
+.race-header-meta {
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-left: 10px;
 }
 
 /* runner rows */
@@ -261,16 +293,30 @@ h2 {
 }
 
 .pred-ev {
-  font-size: 22px;
-  font-weight: 700;
   text-align: right;
 }
 
-.pred-ev.positive {
+.pred-ev-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.pred-ev-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.pred-ev.positive .pred-ev-value {
   color: var(--accent);
 }
 
-.pred-ev.negative {
+.pred-ev.negative .pred-ev-value {
   color: var(--muted);
 }
 

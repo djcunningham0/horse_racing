@@ -62,6 +62,7 @@ def create_race(body: CreateRaceRequest, request: Request) -> CreateRaceResponse
         track=body.track,
         race_number=body.race_number,
         race_date=body.race_date,
+        post_time=body.post_time,
         distance_yards=body.distance_yards,
         surface=body.surface,
         course_desc=body.course_desc,
@@ -85,8 +86,11 @@ def list_races(request: Request) -> list[RaceSummary]:
             track=race.track,
             race_number=race.race_number,
             race_date=race.race_date,
+            post_time=race.post_time,
             distance_yards=race.distance_yards,
             surface=race.surface,
+            age_restriction=race.age_restriction,
+            sex_restriction=race.sex_restriction,
             num_runners=len(_active_runners(race)),
         )
         for race in races.values()
